@@ -65,8 +65,8 @@ local RESET_COOLDOWN = 0.5
 local resetting = false
 
 local CAM_BIND = "InstaResetCam"
-local FLING_TIME = 0.4
-local FLING_POWER = 50000
+local FLING_TIME = 0.5
+local FLING_POWER = 999999
 local USE_VOID = true
 local VOID_TIME = 0.6
 local TIMEOUT = 6
@@ -436,7 +436,7 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 -- ==========================================
--- PING LAGGER (mantido)
+-- PING LAGGER
 -- ==========================================
 _G.LaggerOnFlash = _G.LaggerOnFlash or false
 _G.LaggerPower = _G.LaggerPower or 50
@@ -1206,7 +1206,6 @@ if JailState.Enabled then startAutoResetJail() end
 _G.APESP = savedSettings.APESP or false
 _G.EspTimer = savedSettings.EspTimer or false
 _G.QuickAP = savedSettings.QuickAP or false
-_G.AutoReturnBase = savedSettings.AutoReturnBase or false
 _G.BackpackESP = savedSettings.BackpackESP or false
 _G.ShowAPESP = savedSettings.ShowAPESP or true
 _G.ShowGiantPotion = savedSettings.ShowGiantPotion or true
@@ -1217,6 +1216,7 @@ QuickPickup.set(_G.QuickPickup)
 
 _G.AntiRagdoll = savedSettings.AntiRagdoll or false
 _G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled or true
+_G.PlayerESP = savedSettings.PlayerESP or false
 
 local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
@@ -1241,6 +1241,135 @@ local player = LocalPlayer
 local maxVelocity = 40
 local clampVelocity = 25
 local maxClamp = 15
+
+-- ==========================================
+-- PLAYER ESP (Cor Rosa, Modo Esqueleto, Nome Acima)
+-- ==========================================
+local playerEspInstances = {}
+
+local function clearPlayerESP()
+    for userId, data in pairs(playerEspInstances) do
+        pcall(function()
+            if data.bb then data.bb:Destroy() end
+            if data.highlight then data.highlight:Destroy() end
+        end)
+        playerEspInstances[userId] = nil
+    end
+end
+
+local function createPlayerESP(player)
+    if not _G.PlayerESP then return end
+    local char = player.Character
+    if not char then return end
+    
+    -- Verifica se já existe ESP para este jogador
+    if playerEspInstances[player.UserId] then
+        local data = playerEspInstances[player.UserId]
+        -- Atualiza o adornee se o personagem mudou
+        if data.bb and data.bb.Adornee ~= char then
+            data.bb.Adornee = char
+        end
+        return
+    end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- HIGHLIGHT (Modo Esqueleto - Cor Rosa)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "_PlayerESP_Highlight"
+    highlight.FillColor = Color3.fromRGB(255, 80, 180) -- Rosa
+    highlight.OutlineColor = Color3.fromRGB(255, 120, 200)
+    highlight.FillTransparency = 0.7 -- Semi-transparente para efeito esqueleto
+    highlight.OutlineTransparency = 0.2
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = char
+    highlight.Parent = char
+    
+    -- BILLBOARD GUI (Nome Acima)
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "_PlayerESP_Name"
+    bb.Size = UDim2.new(0, 120, 0, 28)
+    bb.StudsOffset = Vector3.new(0, 3.5, 0)
+    bb.AlwaysOnTop = true
+    bb.Adornee = hrp
+    bb.MaxDistance = 250
+    bb.Parent = char
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.DisplayName
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextColor3 = Color3.fromRGB(255, 150, 220) -- Rosa claro
+    nameLabel.TextScaled = true
+    nameLabel.TextStrokeTransparency = 0.2
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(80, 0, 60)
+    nameLabel.Parent = bb
+    
+    playerEspInstances[player.UserId] = {
+        bb = bb,
+        highlight = highlight,
+        character = char
+    }
+end
+
+local function updatePlayerESP()
+    if not _G.PlayerESP then
+        clearPlayerESP()
+        return
+    end
+    
+    local currentPlayers = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            currentPlayers[p.UserId] = true
+            createPlayerESP(p)
+        end
+    end
+    
+    -- Remove ESP de jogadores que saíram
+    for userId, data in pairs(playerEspInstances) do
+        if not currentPlayers[userId] then
+            pcall(function()
+                if data.bb then data.bb:Destroy() end
+                if data.highlight then data.highlight:Destroy() end
+            end)
+            playerEspInstances[userId] = nil
+        end
+    end
+end
+
+-- Atualiza ESP quando jogadores entram/saem
+Players.PlayerAdded:Connect(function(p)
+    task.wait(0.5)
+    updatePlayerESP()
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if playerEspInstances[p.UserId] then
+        pcall(function()
+            local data = playerEspInstances[p.UserId]
+            if data.bb then data.bb:Destroy() end
+            if data.highlight then data.highlight:Destroy() end
+        end)
+        playerEspInstances[p.UserId] = nil
+    end
+end)
+
+-- Atualiza ESP quando um personagem é adicionado
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    updatePlayerESP()
+end)
+
+-- Loop de atualização
+task.spawn(function()
+    while true do
+        pcall(updatePlayerESP)
+        task.wait(0.5)
+    end
+end)
 
 -- ==========================================
 -- ANTI RAGDOLL (mantido)
@@ -1580,127 +1709,6 @@ end
 local STOP_DIST = 5
 local SLOW_DIST = 20
 
--- ==========================================
--- AUTO RETURN TO BASE (mantido)
--- ==========================================
-local BASE_TARGET = Vector3.new(-350.8919, -6.6011, 108.6947)
-local BASE_SPEED = 25
-local BASE_STOP_DIST = 3
-local BASE_SLOW_DIST = 15
-local returnMovement = nil
-
-local function stopReturnToBase()
-    if returnMovement then
-        pcall(function() returnMovement:Disconnect() end)
-        returnMovement = nil
-    end
-end
-
-local function startReturnToBase()
-    if not Root or not Humanoid then return end
-    stopReturnToBase()
-    local savedWalkSpeed = Humanoid.WalkSpeed
-    local savedJumpPower = Humanoid.JumpPower
-    Humanoid.WalkSpeed = 0
-    Humanoid.JumpPower = 0
-    Humanoid.AutoRotate = false
-
-    local animator = Humanoid:FindFirstChildOfClass("Animator")
-    local animConn
-    if animator then
-        animConn = animator.AnimationPlayed:Connect(function(track)
-            pcall(function() track:Stop(0) end)
-        end)
-    end
-
-    local carpet = findTool(_G.WalkItem or "Flying Carpet")
-    if carpet then
-        pcall(function() Humanoid:UnequipTools() end)
-        task.wait(0.03)
-        pcall(function() Humanoid:EquipTool(carpet) end)
-    end
-
-    if Root:FindFirstChild("ReturnVelocity") then Root:FindFirstChild("ReturnVelocity"):Destroy() end
-    if Root:FindFirstChild("ReturnAttachment") then Root:FindFirstChild("ReturnAttachment"):Destroy() end
-
-    local Attachment = Instance.new("Attachment")
-    Attachment.Name = "ReturnAttachment"
-    Attachment.Parent = Root
-
-    local Velocity = Instance.new("LinearVelocity")
-    Velocity.Name = "ReturnVelocity"
-    Velocity.Attachment0 = Attachment
-    Velocity.RelativeTo = Enum.ActuatorRelativeTo.World
-    Velocity.MaxForce = math.huge
-    Velocity.VectorVelocity = Vector3.zero
-    Velocity.Parent = Root
-
-    local floatStartTime = os.clock()
-    local floatAmplitude = 4
-    local floatSpeed = 3
-
-    local function restore()
-        Humanoid.WalkSpeed = savedWalkSpeed
-        Humanoid.JumpPower = savedJumpPower
-        Humanoid.AutoRotate = true
-        if animConn then pcall(function() animConn:Disconnect() end) end
-        pcall(function() Velocity:Destroy() end)
-        pcall(function() Attachment:Destroy() end)
-    end
-
-    local WAYPOINT = Vector3.new(-348.2184, -6.6011, 7.1711)
-    local useWaypoint = selectedSlotNumber and selectedSlotNumber >= 1 and selectedSlotNumber <= 10
-    local waypointReached = not useWaypoint
-
-    returnMovement = RunService.Heartbeat:Connect(function()
-        if thisScriptStopped or not Root or not Root.Parent or not Humanoid or Humanoid.Health <= 0 then
-            restore(); stopReturnToBase(); return
-        end
-        local rootPos = Root.Position
-        if not waypointReached then
-            local wpDir = Vector3.new(WAYPOINT.X - rootPos.X, 0, WAYPOINT.Z - rootPos.Z)
-            local wpDist = wpDir.Magnitude
-            if wpDist <= BASE_STOP_DIST then
-                waypointReached = true
-            else
-                local floatY = math.sin((os.clock() - floatStartTime) * floatSpeed) * floatAmplitude
-                local targetY = WAYPOINT.Y + floatAmplitude + floatY + 4
-                local vertErr = targetY - rootPos.Y
-                local vertVel = math.clamp(vertErr * 5, -15, 15)
-                local speedMult = 1
-                if wpDist < BASE_SLOW_DIST then speedMult = math.max(0.15, wpDist / BASE_SLOW_DIST) end
-                local moveDir = wpDir.Unit
-                Velocity.VectorVelocity = Vector3.new(
-                    moveDir.X * BASE_SPEED * speedMult,
-                    vertVel,
-                    moveDir.Z * BASE_SPEED * speedMult
-                )
-                return
-            end
-        end
-        local dir2D = Vector3.new(BASE_TARGET.X - rootPos.X, 0, BASE_TARGET.Z - rootPos.Z)
-        local dist = dir2D.Magnitude
-        if dist <= BASE_STOP_DIST then
-            Velocity.VectorVelocity = Vector3.zero
-            pcall(function() Root.AssemblyLinearVelocity = Vector3.zero end)
-            Root.CFrame = CFrame.new(BASE_TARGET)
-            restore(); stopReturnToBase(); return
-        end
-        local floatY = math.sin((os.clock() - floatStartTime) * floatSpeed) * floatAmplitude
-        local targetY = BASE_TARGET.Y + floatAmplitude + floatY + 4
-        local vertErr = targetY - rootPos.Y
-        local vertVel = math.clamp(vertErr * 5, -15, 15)
-        local speedMult = 1
-        if dist < BASE_SLOW_DIST then speedMult = math.max(0.15, dist / BASE_SLOW_DIST) end
-        local moveDir = dir2D.Unit
-        Velocity.VectorVelocity = Vector3.new(
-            moveDir.X * BASE_SPEED * speedMult,
-            vertVel,
-            moveDir.Z * BASE_SPEED * speedMult
-        )
-    end)
-end
-
 local _resetWasByBalloon = false
 local balloonConnection
 balloonConnection = LocalPlayer:GetAttributeChangedSignal("Balloon"):Connect(function()
@@ -2000,7 +2008,6 @@ local function updatePetList()
         nameLabel.TextSize = 13
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.Parent = row
-        -- Gradiente simples (sem brainrot, apenas estético)
         local nameGrad = Instance.new("UIGradient")
         nameGrad.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(235, 235, 240)),
@@ -3117,7 +3124,7 @@ local function BuildHUB()
     scrollListRef = ScrollingFrame
 
     -- ==========================================
-    -- PANEL 4 : SETTINGS (sem Infinite Jump, sem Auto Grab)
+    -- PANEL 4 : SETTINGS (sem Infinite Jump, sem Auto Grab, sem Auto Return Base, sem Auto Balloon, sem Keyboard Overlay)
     -- ==========================================
     local SW = isMob and 320 or 380
     local SH = isMob and 350 or 420
@@ -4249,7 +4256,7 @@ local function BuildHUB()
     end)
 
     -- ==========================================
-    -- CONTENU SETTINGS (sans Infinite Jump ni Auto Grab)
+    -- CONTENU SETTINGS (sans Infinite Jump, sans Auto Grab, sans Auto Return Base, sans Auto Balloon, sans Keyboard Overlay)
     -- ==========================================
     settingsGetters = {
         AutoResetOnBalloon = function() return _G.AutoResetOnBalloon end,
@@ -4259,13 +4266,11 @@ local function BuildHUB()
         AutoBlock = function() return _G.AutoBlock end,
         BlockMode = function() return _G.BlockMode end,
         AntiRagdoll = function() return antiRagdollEnabled end,
-        AutoBalloon = function() return _G.AutoBalloon end,
         AutoResetTiny = function() return _G.AutoResetTiny end,
         AutoResetJail = function() return _G.AutoResetJail end,
         APESP = function() return _G.APESP end,
         EspTimer = function() return _G.EspTimer end,
         QuickAP = function() return _G.QuickAP end,
-        AutoReturnBase = function() return _G.AutoReturnBase end,
         WalkItem = function() return _G.WalkItem end,
         BackpackESP = function() return _G.BackpackESP end,
         ShowAPESP = function() return _G.ShowAPESP end,
@@ -4278,7 +4283,7 @@ local function BuildHUB()
         LaggerPower = function() return _G.LaggerPower or 50 end,
         FlashSpeed = function() return _G.FlashSpeed or 150 end,
         AllowDisallowEnabled = function() return _G.AllowDisallowEnabled or true end,
-        KeyboardOverlay = function() return _G.KeyboardOverlay or false end,
+        PlayerESP = function() return _G.PlayerESP or false end,
     }
 
     -- ==========================================
@@ -4555,15 +4560,9 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- TAB : MISC (sans Infinite Jump ni Auto Grab)
+    -- TAB : MISC (sans Infinite Jump, sans Auto Grab, sans Auto Return Base, sans Auto Balloon, sans Keyboard Overlay)
     -- ==========================================
     sectionHeader(ScrollMisc, "  MISC  ")
-    toggleRow(ScrollMisc, "Auto Return to Base", _G.AutoReturnBase, function(v) _G.AutoReturnBase = v end)
-    toggleRow(ScrollMisc, "Auto Balloon", _G.AutoBalloon, function(v)
-        _G.AutoBalloon = v
-        BalloonState.Auto = v
-        if not v then BalloonState.Active = {} end
-    end)
     toggleRow(ScrollMisc, "Anti Ragdoll", antiRagdollEnabled, function(v)
         antiRagdollEnabled = v
         if v then startAntiRagdoll() else stopAntiRagdoll() end
@@ -4589,11 +4588,6 @@ local function BuildHUB()
         if allowPanel then allowPanel.Visible = v end
         saveSettings()
     end)
-    toggleRow(ScrollMisc, "Keyboard Overlay", _G.KeyboardOverlay or false, function(v)
-        _G.KeyboardOverlay = v
-        if keyboardPanel then keyboardPanel.Visible = v end
-        saveSettings()
-    end)
 
     -- ==========================================
     -- TAB : VISUAL
@@ -4602,6 +4596,10 @@ local function BuildHUB()
     toggleRow(ScrollVisual, "ESP Timer", _G.EspTimer, function(v)
         _G.EspTimer = v
         if not v then clearBaseESP() end
+    end)
+    toggleRow(ScrollVisual, "Player ESP", _G.PlayerESP, function(v)
+        _G.PlayerESP = v
+        if not v then clearPlayerESP() end
     end)
 
     sectionHeader(ScrollVisual, "  BACKPACK ESP  ")
@@ -4944,369 +4942,6 @@ local function BuildHUB()
             end
         end))
     end
-
-    -- ==========================================
-    -- TECLADO VIRTUAL (mantido)
-    -- ==========================================
-    local keyboardPanel = nil
-    local keyCells = {}
-
-    local function buildKeyboard()
-        if keyboardPanel then
-            keyboardPanel:Destroy()
-            keyboardPanel = nil
-            keyCells = {}
-        end
-
-        local KB_KEY_SIZE = 28
-        local KB_KEY_GAP = 4
-        local KB_ROW_COUNT = 5
-        local KB_UNIT = KB_KEY_SIZE + KB_KEY_GAP
-        local KB_WIDEST = 0
-        local KEYBOARD_ROWS = {
-            {
-                { id = "Escape", label = "ESC", w = 1.5 },
-                { id = "One", label = "1" }, { id = "Two", label = "2" },
-                { id = "Three", label = "3" }, { id = "Four", label = "4" },
-                { id = "Five", label = "5" },
-            },
-            {
-                { id = "Tab", label = "TAB", w = 1.5 },
-                { id = "Q", label = "Q" }, { id = "W", label = "W" },
-                { id = "E", label = "E" }, { id = "R", label = "R" },
-                { id = "T", label = "T" },
-            },
-            {
-                { id = "CapsLock", label = "CAPS", w = 1.75 },
-                { id = "A", label = "A" }, { id = "S", label = "S" },
-                { id = "D", label = "D" }, { id = "F", label = "F" },
-                { id = "G", label = "G" },
-            },
-            {
-                { id = "LeftShift", label = "SHIFT", w = 2.25 },
-                { id = "Z", label = "Z" }, { id = "X", label = "X" },
-                { id = "C", label = "C" }, { id = "V", label = "V" },
-                { id = "B", label = "B" },
-            },
-            {
-                { id = "LeftControl", label = "CTRL", w = 1.5 },
-                { id = "LeftAlt", label = "ALT", w = 1.25 },
-                { id = "Space", label = "SPACE", w = 3.5 },
-            },
-        }
-
-        for _, row in ipairs(KEYBOARD_ROWS) do
-            local total = 0
-            for _, def in ipairs(row) do total = total + (def.w or 1) end
-            KB_WIDEST = math.max(KB_WIDEST, total)
-        end
-
-        local kbWidth = KB_WIDEST * KB_UNIT - KB_KEY_GAP
-        local kbHeight = #KEYBOARD_ROWS * KB_UNIT - KB_KEY_GAP
-
-        local KPW = kbWidth + 16
-        local KPH = kbHeight + HEADER_H + 16
-        local panelX = screenW - KPW - 20
-        local panelY = screenH - KPH - 20
-
-        keyboardPanel, localContent, localHdr, localTitle = makePanel(
-            "KeyboardPanel", "KEYBOARD",
-            panelX, panelY,
-            KPW, KPH,
-            200, 100
-        )
-        keyboardPanel.Visible = _G.KeyboardOverlay or false
-        registerPanelLayout(keyboardPanel, "KeyboardPanel", 200, 100)
-
-        local kbContainer = Instance.new("Frame")
-        kbContainer.Name = "KeyboardContainer"
-        kbContainer.Size = UDim2.new(1, -8, 1, -8)
-        kbContainer.Position = UDim2.new(0, 4, 0, 4)
-        kbContainer.BackgroundTransparency = 1
-        kbContainer.Parent = localContent
-
-        local function makeKeyCell(rowIndex, colIndex, def, x, y, w, h)
-            local corner = UDim.new(0, 4)
-            local frame = Instance.new("Frame")
-            frame.Name = def.id or "Key"
-            frame.BackgroundColor3 = C.card
-            frame.BackgroundTransparency = 0.3
-            frame.BorderSizePixel = 0
-            frame.ClipsDescendants = true
-            frame.Position = UDim2.fromOffset(x, y)
-            frame.Size = UDim2.fromOffset(w, h)
-            frame.Parent = kbContainer
-            Instance.new("UICorner", frame).CornerRadius = corner
-
-            local stroke = Instance.new("UIStroke")
-            stroke.Color = C.strokeDim
-            stroke.Thickness = 1.2
-            stroke.Transparency = 0.5
-            stroke.Parent = frame
-
-            local fill = Instance.new("Frame")
-            fill.Name = "Fill"
-            fill.BackgroundColor3 = C.accent
-            fill.BackgroundTransparency = 1
-            fill.BorderSizePixel = 0
-            fill.Size = UDim2.fromScale(1, 1)
-            fill.ZIndex = 2
-            fill.Parent = frame
-            Instance.new("UICorner", fill).CornerRadius = corner
-
-            local label
-            if def.label then
-                label = Instance.new("TextLabel")
-                label.BackgroundTransparency = 1
-                label.Size = UDim2.fromScale(1, 1)
-                label.Font = Enum.Font.GothamBold
-                label.Text = def.label
-                label.TextColor3 = C.textBright
-                label.TextScaled = true
-                label.ZIndex = 3
-                label.Parent = frame
-                local pad = Instance.new("UIPadding", label)
-                pad.PaddingLeft = UDim.new(0, 3)
-                pad.PaddingRight = UDim.new(0, 3)
-                pad.PaddingTop = UDim.new(0, 2)
-                pad.PaddingBottom = UDim.new(0, 2)
-                local sizeConst = Instance.new("UITextSizeConstraint", label)
-                sizeConst.MaxTextSize = math.max(9, math.floor(h * 0.55))
-            end
-
-            local cell = {
-                fill = fill,
-                stroke = stroke,
-                label = label,
-                active = false,
-                frame = frame,
-            }
-            function cell:setActive(on)
-                if self.active == on then return end
-                self.active = on
-                local dur = on and 0.06 or 0.1
-                if self.fill then
-                    TweenService:Create(self.fill, TweenInfo.new(dur), {
-                        BackgroundTransparency = on and 0.3 or 1,
-                    }):Play()
-                end
-                if self.stroke then
-                    TweenService:Create(self.stroke, TweenInfo.new(dur), {
-                        Transparency = on and 0 or 0.5,
-                        Color = on and C.accent or C.strokeDim,
-                    }):Play()
-                end
-                if self.label then
-                    TweenService:Create(self.label, TweenInfo.new(dur), {
-                        TextColor3 = on and C.accent or C.textBright,
-                    }):Play()
-                end
-            end
-            keyCells[def.id] = cell
-            return cell
-        end
-
-        for rowIndex, row in ipairs(KEYBOARD_ROWS) do
-            local x = 0
-            local y = (rowIndex - 1) * KB_UNIT
-            for _, def in ipairs(row) do
-                local w = (def.w or 1) * KB_UNIT - KB_KEY_GAP
-                local h = KB_KEY_SIZE
-                makeKeyCell(rowIndex, _, def, math.floor(x), y, math.floor(w), h)
-                x = x + (def.w or 1) * KB_UNIT
-            end
-        end
-
-        local mouseX = kbWidth + 8
-        local mouseY = math.floor((kbHeight - 92) / 2)
-        local mouseWidth = 58
-        local mouseHeight = 92
-        local mouseFrame = Instance.new("Frame")
-        mouseFrame.Name = "Mouse"
-        mouseFrame.BackgroundColor3 = C.card
-        mouseFrame.BackgroundTransparency = 0.3
-        mouseFrame.BorderSizePixel = 0
-        mouseFrame.Position = UDim2.fromOffset(mouseX, mouseY)
-        mouseFrame.Size = UDim2.fromOffset(mouseWidth, mouseHeight)
-        mouseFrame.Parent = kbContainer
-        Instance.new("UICorner", mouseFrame).CornerRadius = UDim.new(0, 8)
-
-        local mouseStroke = Instance.new("UIStroke", mouseFrame)
-        mouseStroke.Color = C.strokeDim
-        mouseStroke.Thickness = 1.2
-        mouseStroke.Transparency = 0.5
-
-        local function makeMouseButton(name, posX, posY, w, h, color)
-            local btn = Instance.new("Frame")
-            btn.Name = name
-            btn.BackgroundColor3 = color or C.card
-            btn.BackgroundTransparency = 0.5
-            btn.BorderSizePixel = 0
-            btn.Position = UDim2.fromOffset(posX, posY)
-            btn.Size = UDim2.fromOffset(w, h)
-            btn.Parent = mouseFrame
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-            local fill = Instance.new("Frame")
-            fill.Name = "Fill"
-            fill.BackgroundColor3 = C.accent
-            fill.BackgroundTransparency = 1
-            fill.BorderSizePixel = 0
-            fill.Size = UDim2.fromScale(1, 1)
-            fill.ZIndex = 2
-            fill.Parent = btn
-            Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
-            local cell = {
-                fill = fill,
-                stroke = nil,
-                label = nil,
-                active = false,
-                frame = btn,
-            }
-            function cell:setActive(on)
-                if self.active == on then return end
-                self.active = on
-                local dur = on and 0.06 or 0.1
-                if self.fill then
-                    TweenService:Create(self.fill, TweenInfo.new(dur), {
-                        BackgroundTransparency = on and 0.3 or 1,
-                    }):Play()
-                end
-            end
-            return cell
-        end
-
-        local leftBtn = makeMouseButton("LeftButton", 2, 2, 20, 36, C.card)
-        local rightBtn = makeMouseButton("RightButton", mouseWidth-22, 2, 20, 36, C.card)
-        keyCells.Mouse1 = leftBtn
-        keyCells.Mouse2 = rightBtn
-
-        local wheelW = 10
-        local wheelH = 18
-        local wheelFrame = Instance.new("Frame")
-        wheelFrame.Name = "Wheel"
-        wheelFrame.BackgroundColor3 = C.card
-        wheelFrame.BackgroundTransparency = 0.3
-        wheelFrame.BorderSizePixel = 0
-        wheelFrame.Position = UDim2.fromOffset((mouseWidth-wheelW)/2, 10)
-        wheelFrame.Size = UDim2.fromOffset(wheelW, wheelH)
-        wheelFrame.Parent = mouseFrame
-        Instance.new("UICorner", wheelFrame).CornerRadius = UDim.new(1, 0)
-        local wheelStroke = Instance.new("UIStroke", wheelFrame)
-        wheelStroke.Color = C.strokeDim
-        wheelStroke.Thickness = 1.2
-        wheelStroke.Transparency = 0.5
-        local wheelFill = Instance.new("Frame")
-        wheelFill.Name = "Fill"
-        wheelFill.BackgroundColor3 = C.accent
-        wheelFill.BackgroundTransparency = 1
-        wheelFill.BorderSizePixel = 0
-        wheelFill.Size = UDim2.fromScale(1, 1)
-        wheelFill.ZIndex = 2
-        wheelFill.Parent = wheelFrame
-        Instance.new("UICorner", wheelFill).CornerRadius = UDim.new(1, 0)
-
-        local wheelCell = {
-            fill = wheelFill,
-            stroke = wheelStroke,
-            label = nil,
-            active = false,
-            frame = wheelFrame,
-        }
-        function wheelCell:setActive(on)
-            if self.active == on then return end
-            self.active = on
-            local dur = on and 0.06 or 0.1
-            if self.fill then
-                TweenService:Create(self.fill, TweenInfo.new(dur), {
-                    BackgroundTransparency = on and 0.3 or 1,
-                }):Play()
-            end
-            if self.stroke then
-                TweenService:Create(self.stroke, TweenInfo.new(dur), {
-                    Transparency = on and 0 or 0.5,
-                    Color = on and C.accent or C.strokeDim,
-                }):Play()
-            end
-        end
-        function wheelCell:flash(duration)
-            self:setActive(true)
-            task.delay(duration, function()
-                if self.fill and self.fill.Parent then
-                    self:setActive(false)
-                end
-            end)
-        end
-        keyCells.Mouse3 = wheelCell
-
-        local function resolveId(input)
-            local kind = input.UserInputType
-            if kind == Enum.UserInputType.Keyboard then
-                return input.KeyCode.Name
-            elseif kind == Enum.UserInputType.MouseButton1 then
-                return "Mouse1"
-            elseif kind == Enum.UserInputType.MouseButton2 then
-                return "Mouse2"
-            elseif kind == Enum.UserInputType.MouseButton3 then
-                return "Mouse3"
-            end
-            return nil
-        end
-
-        local function isTyping()
-            return UserInputService:GetFocusedTextBox() ~= nil
-        end
-
-        local kbInputBegan = UserInputService.InputBegan:Connect(function(input)
-            if not keyboardPanel or not keyboardPanel.Visible then return end
-            if isTyping() then return end
-            local id = resolveId(input)
-            local cell = id and keyCells[id]
-            if cell then
-                cell:setActive(true)
-            end
-        end)
-        table.insert(ActiveConnections, kbInputBegan)
-
-        local kbInputEnded = UserInputService.InputEnded:Connect(function(input)
-            if not keyboardPanel or not keyboardPanel.Visible then return end
-            local id = resolveId(input)
-            local cell = id and keyCells[id]
-            if cell then
-                cell:setActive(false)
-            end
-        end)
-        table.insert(ActiveConnections, kbInputEnded)
-
-        local kbInputChanged = UserInputService.InputChanged:Connect(function(input)
-            if not keyboardPanel or not keyboardPanel.Visible then return end
-            if input.UserInputType == Enum.UserInputType.MouseWheel then
-                local cell = keyCells.Mouse3
-                if cell then
-                    cell:flash(0.13)
-                end
-            end
-        end)
-        table.insert(ActiveConnections, kbInputChanged)
-
-        local focusReleasedConn = UserInputService.WindowFocusReleased:Connect(function()
-            if not keyboardPanel or not keyboardPanel.Visible then return end
-            for _, cell in pairs(keyCells) do
-                if cell and cell.setActive then
-                    cell:setActive(false)
-                end
-            end
-        end)
-        table.insert(ActiveConnections, focusReleasedConn)
-
-        return keyboardPanel
-    end
-
-    buildKeyboard()
-
-    if _G.KeyboardOverlay == nil then _G.KeyboardOverlay = false end
-    if _G.KeyboardOverlay and keyboardPanel then
-        keyboardPanel.Visible = true
-    end
 end
 
 BuildHUB()
@@ -5331,6 +4966,7 @@ local function cleanup()
     clearBaseESP()
     clearBackpackESP()
     clearAPESP()
+    clearPlayerESP()
     UltraBooster.stop()
 end
 
