@@ -23,48 +23,13 @@ local ActiveConnections = {}
 local thisScriptStopped = false
 
 -- ==========================================
--- HIDE NAMES (mantido)
--- ==========================================
-local function hideNames()
-    local toHide = {
-        "FadedHub","FadedHubESP","AutoStealGui","KaiAutoFarmGUI","XiNotif",
-        "AutoStealCurrentTargetHUD","AutoStealTargetControls","XiPriorityAlert",
-        "XiMobileControls","SettingsUI","XiAdminPanel","XiJobJoiner","XiInvisPanel",
-        "ErrorOrbGui","LagbackNotification","DexPopup","DatShawnSpam","DatShawnSpamPanel",
-        "DexLogger","GreenDuelsV2","ZLHubSelector","ZLFirstPersonTag","NineHubUI",
-        "SakuraAutoBatDesyncGUI","EnvyAutoBatDesyncGUI","MwvaneNewaBatDesyncGUI",
-        "PhazeAutoBatDesyncGUI","K7_Ultimate_Bypass","BloomTP","CleanDuels_UI",
-        "KillHubGui","IntroGUI","AnimPackGUI","IftarSemiTP_ProgressBar","IftarSemiTP",
-        "PistachioHubGui","RadioactiveHubGui","PhantomSemiTP_Halfway","CatHUB_Halfway",
-        "StealBarGui","AutoStealBar","StealProgressWindow","GreenHUBIntro",
-        "GreenDuelsLineESP","AllowFriendsGui","DiscordLabelGui","NoxHubColorPicker",
-        "NoxGui","PanelGui_Actions","PanelGui_Admin Panel","PanelGui_Booster",
-        "PanelGui_Command Cooldowns","PanelGui_Instant Steal V2","PanelGui_Nox Admin Spammer",
-        "PanelGui_Nox Defense","UI_Watermark","UnlockBaseGui","G12BatTP","AutoStealUI",
-        "G12s Anti Bat","IrishHubGui","IrishAutoGrab","ControlEfectoGUI","PhiAutotyper",
-        "HollowInvisible","V3StealProgressBar","SABHub","HIGH HUB","AllowPanel",
-        "ActionsPanel","BrainrotsPanel","SettingsPanel","QuickAPPanel"
-    }
-    for _, name in ipairs(toHide) do
-        local gui = gethui():FindFirstChild(name)
-        if gui then
-            gui.Name = "67"
-            gui.Parent = gethui()
-        end
-    end
-end
-task.spawn(function()
-    while task.wait(2) do pcall(hideNames) end
-end)
-
--- ==========================================
--- INSTANT RESET (mantido)
+-- INSTANT RESET
 -- ==========================================
 local resetCooldown = false
 local RESET_COOLDOWN = 0.5
 local resetting = false
 
-local CAM_BIND = "InstaResetCam"
+local CAM_BIND = "67_InstaResetCam"
 local FLING_TIME = 0.5
 local FLING_POWER = 999999
 local USE_VOID = true
@@ -469,7 +434,7 @@ _G.FlashSpeed = _G.FlashSpeed or 150
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
 
 -- ==========================================
--- SLOTS CONFIG (mantido)
+-- SLOTS CONFIG
 -- ==========================================
 local SlotsConfig = {
     [1] = { Positions = { Vector3.new(-345.4766,-6.0291,1.5014) }, CamOffset = Vector3.new(-354.1492,4.0350,9.3823)-Vector3.new(-345.4766,-6.0291,1.5014), CamAngles = {-0.827500,-0.640100,-0.576243} },
@@ -502,7 +467,7 @@ local SlotsConfig = {
 }
 
 -- ==========================================
--- AUTO BALLOON (mantido)
+-- AUTO BALLOON
 -- ==========================================
 local MultiZones = {
     {Shape='Line',   Center=Vector3.new(-345.35,-6.55, 39.19), Size=5,  Rotation=0},
@@ -556,8 +521,7 @@ local function isNearAnyPoint(pos)
         local dz = pos.Z - w.pz
         local depth = dx * w.nx + dz * w.nz
         if math.abs(depth) > 2.5 then continue end
-        local side = dx * w.ax + dz * w.az
-        if math.abs(side) > w.halfW + 1.5 then continue end
+        local side = dx * w.ax + dz * w.az        if math.abs(side) > w.halfW + 1.5 then continue end
         return true
     end
     return false
@@ -700,7 +664,7 @@ end)
 Players.PlayerRemoving:Connect(function(p) BalloonState.Active[p.UserId] = nil end)
 
 -- ==========================================
--- TINY RESET (mantido)
+-- TINY RESET
 -- ==========================================
 local TinyState = { Enabled = false, Conns = {}, BoundRemotes = {}, AddConn = nil, LastFire = 0 }
 
@@ -753,7 +717,7 @@ local function stopAutoResetTiny()
 end
 
 -- ==========================================
--- JAIL RESET (mantido)
+-- JAIL RESET
 -- ==========================================
 local JailState = { Enabled = false, Conns = {}, BoundRemotes = {}, AddConn = nil, LastFire = 0 }
 
@@ -806,7 +770,7 @@ local function stopAutoResetJail()
 end
 
 -- ==========================================
--- QUICK PICKUP (mantido)
+-- QUICK PICKUP
 -- ==========================================
 local QuickPickup = (function()
     local enabled = false
@@ -913,7 +877,7 @@ end
 local settingsGetters = {}
 
 -- ==========================================
--- AIMBOT (mantido)
+-- AIMBOT
 -- ==========================================
 do
     if _G.HighAimbotSetupDone then return end
@@ -1262,10 +1226,8 @@ local function createPlayerESP(player)
     local char = player.Character
     if not char then return end
     
-    -- Verifica se já existe ESP para este jogador
     if playerEspInstances[player.UserId] then
         local data = playerEspInstances[player.UserId]
-        -- Atualiza o adornee se o personagem mudou
         if data.bb and data.bb.Adornee ~= char then
             data.bb.Adornee = char
         end
@@ -1275,20 +1237,18 @@ local function createPlayerESP(player)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- HIGHLIGHT (Modo Esqueleto - Cor Rosa)
     local highlight = Instance.new("Highlight")
-    highlight.Name = "_PlayerESP_Highlight"
-    highlight.FillColor = Color3.fromRGB(255, 80, 180) -- Rosa
+    highlight.Name = "67_ESP"
+    highlight.FillColor = Color3.fromRGB(255, 80, 180)
     highlight.OutlineColor = Color3.fromRGB(255, 120, 200)
-    highlight.FillTransparency = 0.7 -- Semi-transparente para efeito esqueleto
+    highlight.FillTransparency = 0.7
     highlight.OutlineTransparency = 0.2
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.Adornee = char
     highlight.Parent = char
     
-    -- BILLBOARD GUI (Nome Acima)
     local bb = Instance.new("BillboardGui")
-    bb.Name = "_PlayerESP_Name"
+    bb.Name = "67_ESP"
     bb.Size = UDim2.new(0, 120, 0, 28)
     bb.StudsOffset = Vector3.new(0, 3.5, 0)
     bb.AlwaysOnTop = true
@@ -1297,11 +1257,12 @@ local function createPlayerESP(player)
     bb.Parent = char
     
     local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "67"
     nameLabel.Size = UDim2.new(1, 0, 1, 0)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = player.DisplayName
     nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextColor3 = Color3.fromRGB(255, 150, 220) -- Rosa claro
+    nameLabel.TextColor3 = Color3.fromRGB(255, 150, 220)
     nameLabel.TextScaled = true
     nameLabel.TextStrokeTransparency = 0.2
     nameLabel.TextStrokeColor3 = Color3.fromRGB(80, 0, 60)
@@ -1328,7 +1289,6 @@ local function updatePlayerESP()
         end
     end
     
-    -- Remove ESP de jogadores que saíram
     for userId, data in pairs(playerEspInstances) do
         if not currentPlayers[userId] then
             pcall(function()
@@ -1340,7 +1300,6 @@ local function updatePlayerESP()
     end
 end
 
--- Atualiza ESP quando jogadores entram/saem
 Players.PlayerAdded:Connect(function(p)
     task.wait(0.5)
     updatePlayerESP()
@@ -1357,13 +1316,11 @@ Players.PlayerRemoving:Connect(function(p)
     end
 end)
 
--- Atualiza ESP quando um personagem é adicionado
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     updatePlayerESP()
 end)
 
--- Loop de atualização
 task.spawn(function()
     while true do
         pcall(updatePlayerESP)
@@ -1372,7 +1329,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ANTI RAGDOLL (mantido)
+-- ANTI RAGDOLL
 -- ==========================================
 local AntiRagdollConns = {}
 local antiRagdollEnabled = _G.AntiRagdoll or false
@@ -1541,7 +1498,7 @@ end))
 if antiRagdollEnabled then task.spawn(startAntiRagdoll) end
 
 -- ==========================================
--- FAST CONFIRM / PROMPT CLICK (mantido)
+-- FAST CONFIRM / PROMPT CLICK
 -- ==========================================
 local function FastConfirm()
     local res = GuiService:GetScreenResolution()
@@ -1638,7 +1595,7 @@ end)
 table.insert(ActiveConnections, charAddedConn)
 
 -- ==========================================
--- UNWALK ANIM (mantido)
+-- UNWALK ANIM
 -- ==========================================
 local function stopWalkAnimations()
     local char = LocalPlayer.Character
@@ -1656,7 +1613,7 @@ local function stopWalkAnimations()
 end
 
 -- ==========================================
--- FUNÇÕES UTILITÁRIAS (mantido)
+-- FUNÇÕES UTILITÁRIAS
 -- ==========================================
 local function findTool(name)
     if not Character then return nil end
@@ -1745,7 +1702,7 @@ local PREBLOCK_DIST_BY_SLOT = {
 local clearTpPathVisual = function() end
 
 -- ==========================================
--- START TRIP TO PET SLOT (mantido)
+-- START TRIP TO PET SLOT
 -- ==========================================
 local function startTripToPetSlot(prompt, slotNumber)
     local config = SlotsConfig[slotNumber] or SlotsConfig[1]
@@ -1897,7 +1854,7 @@ end
 local scrollListRef = nil
 
 -- ==========================================
--- UPDATE PET LIST (mantido, sem brainrot highlights)
+-- UPDATE PET LIST
 -- ==========================================
 local function updatePetList()
     if isStealing or autoStealEnabled or thisScriptStopped then return end
@@ -2043,14 +2000,14 @@ local function updatePetList()
 end
 
 -- ==========================================
--- ESP TIMER (mantido)
+-- ESP TIMER
 -- ==========================================
 local baseEspInstances = {}
 
 local function createBaseESP(plot, mainPart)
     if baseEspInstances[plot.Name] then baseEspInstances[plot.Name]:Destroy() end
     local bb = Instance.new("BillboardGui")
-    bb.Name = "WHITE_BaseTimer"
+    bb.Name = "67_Timer"
     bb.Size = UDim2.new(0, 50, 0, 20)
     bb.StudsOffset = Vector3.new(0, 4, 0)
     bb.AlwaysOnTop = true
@@ -2282,7 +2239,6 @@ function UltraBooster.start()
             pcall(collectgarbage, "collect")
         end
     end)
-    print("✅ ULTRA BOOSTER (FPS) ATIVADO")
 end
 
 function UltraBooster.stop()
@@ -2293,7 +2249,7 @@ function UltraBooster.stop()
 end
 
 -- ==========================================
--- AP ESP (mantido)
+-- AP ESP
 -- ==========================================
 local apEspInstances = {}
 
@@ -2326,7 +2282,7 @@ local function updateAPESP()
         end
         if not apEspInstances[p.UserId] then
             local bb = Instance.new("BillboardGui")
-            bb.Name = "_APESP"
+            bb.Name = "67_AP_ESP"
             bb.Size = UDim2.new(0, 52, 0, 52)
             bb.StudsOffset = Vector3.new(3.5, 7, 0)
             bb.AlwaysOnTop = true
@@ -2360,7 +2316,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- BACKPACK ESP (mantido)
+-- BACKPACK ESP
 -- ==========================================
 local BACKPACK_TRACKED = {
     ["Giant Potion"] = true,
@@ -2382,7 +2338,7 @@ local function buildBackpackBillboard(char, hrp, found)
     local ICON = 48
     local GAP = 4
     local bb = Instance.new("BillboardGui")
-    bb.Name = "_BackpackESP"
+    bb.Name = "67_BP_ESP"
     bb.Size = UDim2.new(0, ICON, 0, ICON * count + GAP * (count - 1))
     bb.StudsOffset = Vector3.new(3.5, 0, 0)
     bb.AlwaysOnTop = true
@@ -2543,7 +2499,7 @@ local function BuildHUB()
     local guiLocked = false
 
     local lockBtn = Instance.new("TextButton")
-    lockBtn.Name = "LockButton"
+    lockBtn.Name = "67"
     lockBtn.Size = UDim2.new(0, 32, 0, 32)
     lockBtn.Position = UDim2.new(0, 8, 0, 8)
     lockBtn.BackgroundColor3 = C.card
@@ -2568,7 +2524,7 @@ local function BuildHUB()
         lockBtn.TextColor3 = locked and Color3.fromRGB(255, 200, 100) or C.textBright
 
         for _, child in ipairs(HIGH_HUB_GUI:GetChildren()) do
-            if child:IsA("Frame") and child.Name ~= "LockButton" then
+            if child:IsA("Frame") and child.Name ~= "67" then
                 if locked then
                     child.Active = false
                     child.Selectable = false
@@ -2701,7 +2657,7 @@ local function BuildHUB()
 
     local function makePanel(name, titleText, px, py, pw, ph, minW, minH)
         local panel = Instance.new("Frame")
-        panel.Name = name
+        panel.Name = "67"
         panel.Size = UDim2.new(0, pw, 0, ph)
         panel.Position = UDim2.new(0, px, 0, py)
         panel.BackgroundColor3 = C.body
@@ -2713,7 +2669,7 @@ local function BuildHUB()
         local ps = Instance.new("UIStroke", panel); ps.Color = C.stroke; ps.Thickness = 1.4
 
         local hdr = Instance.new("Frame")
-        hdr.Name = "Header"
+        hdr.Name = "67"
         hdr.Size = UDim2.new(1, 0, 0, HEADER_H)
         hdr.BackgroundColor3 = C.panel
         hdr.BackgroundTransparency = 0.20
@@ -2765,7 +2721,7 @@ local function BuildHUB()
         end))
 
         local content = Instance.new("Frame")
-        content.Name = "Content"
+        content.Name = "67"
         content.Size = UDim2.new(1, 0, 1, -HEADER_H)
         content.Position = UDim2.new(0, 0, 0, HEADER_H)
         content.BackgroundTransparency = 1
@@ -2794,7 +2750,8 @@ local function BuildHUB()
         local AH = HEADER_H + 12 + ACT_BTN_H + 8
 
         local actionsPanel, actionsContent, actionsHdr = makePanel(
-            "ActionsPanel", "ACTIONS",
+            "67",
+            "ACTIONS",
             math.floor(screenW / 2 - AW / 2),
             math.floor(screenH * 0.07) - 25,
             AW, AH, 180, AH
@@ -2802,7 +2759,7 @@ local function BuildHUB()
         registerPanelLayout(actionsPanel, "ActionsPanel", 180, AH)
 
         local btnContainer = Instance.new("Frame")
-        btnContainer.Name = "ActionsContainer"
+        btnContainer.Name = "67"
         btnContainer.Size = UDim2.new(1, -14, 1, -10)
         btnContainer.Position = UDim2.new(0, 7, 0, 6)
         btnContainer.BackgroundTransparency = 1
@@ -2820,7 +2777,7 @@ local function BuildHUB()
 
         local function mkActionBtn(name, txt, order)
             local b = Instance.new("TextButton")
-            b.Name = name
+            b.Name = "67"
             b.Size = UDim2.new(0, ACT_BTN_W, 0, ACT_BTN_H)
             b.BackgroundColor3 = C.card
             b.BackgroundTransparency = 0.2
@@ -2849,7 +2806,7 @@ local function BuildHUB()
             lbl.TextYAlignment = Enum.TextYAlignment.Center
             lbl.Parent = b
             local bar = Instance.new("Frame")
-            bar.Name = "AccentBar"
+            bar.Name = "67"
             bar.Size = UDim2.new(0, 0, 0, 0)
             bar.BackgroundColor3 = C.stroke
             bar.BackgroundTransparency = 1
@@ -2859,13 +2816,13 @@ local function BuildHUB()
             return b, bar, lbl
         end
 
-        FLASHTP, flashAccent = mkActionBtn("FLASHTP", "FLASH TP", 1)
-        BLOCK, blockAccent = mkActionBtn("BLOCK", "BLOCK", 2)
-        RESET, resetAccent = mkActionBtn("RESET", "RESET", 3)
+        FLASHTP, flashAccent = mkActionBtn("67", "⚡ FLASH TP", 1)
+        BLOCK, blockAccent = mkActionBtn("67", "🛡️ BLOCK", 2)
+        RESET, resetAccent = mkActionBtn("67", "🔄 RESET", 3)
     end
 
     -- ==========================================
-    -- PANEL 2 : ALLOW/DISALLOW (mantido)
+    -- PANEL 2 : ALLOW/DISALLOW
     -- ==========================================
     local ADW = isMob and 300 or 360
     local AD_BTN_W = isMob and 120 or 140
@@ -2873,7 +2830,8 @@ local function BuildHUB()
     local ADH = HEADER_H + 12 + AD_BTN_H + 8
 
     local allowPanel, allowContent, allowHdr = makePanel(
-        "AllowPanel", "ALLOW/DISALLOW",
+        "67",
+        "ALLOW/DISALLOW",
         math.floor(screenW / 2 - ADW / 2),
         math.floor(screenH * 0.07 + 35),
         ADW, ADH, 170, ADH
@@ -2882,7 +2840,7 @@ local function BuildHUB()
     registerPanelLayout(allowPanel, "AllowPanel", 170, ADH)
 
     local allowBtnContainer = Instance.new("Frame")
-    allowBtnContainer.Name = "AllowContainer"
+    allowBtnContainer.Name = "67"
     allowBtnContainer.Size = UDim2.new(1, -14, 1, -10)
     allowBtnContainer.Position = UDim2.new(0, 7, 0, 6)
     allowBtnContainer.BackgroundTransparency = 1
@@ -2899,7 +2857,7 @@ local function BuildHUB()
     local allowBtn, allowAccent
     do
         local b = Instance.new("TextButton")
-        b.Name = "AllowToggle"
+        b.Name = "67"
         b.Size = UDim2.new(0, AD_BTN_W, 0, AD_BTN_H)
         b.BackgroundColor3 = C.card
         b.BackgroundTransparency = 0.2
@@ -2930,7 +2888,7 @@ local function BuildHUB()
         lbl.Parent = b
 
         local bar = Instance.new("Frame")
-        bar.Name = "AccentBar"
+        bar.Name = "67"
         bar.Size = UDim2.new(0, 0, 0, 0)
         bar.BackgroundColor3 = C.stroke
         bar.BackgroundTransparency = 1
@@ -3082,13 +3040,14 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- PANEL 3 : BRAINROTS (lista de pets, sem highlights)
+    -- PANEL 3 : BRAINROTS (lista de pets)
     -- ==========================================
     local BW = isMob and 198 or 234
     local BH = isMob and 195 or 245
 
     local brainrotsPanel, brainrotsContent = makePanel(
-        "BrainrotsPanel", "BRAINROTS",
+        "67",
+        "BRAINROTS",
         math.floor(screenW / 2 - BW / 2),
         math.floor(screenH * 0.22),
         BW, BH, 160, 130
@@ -3096,7 +3055,7 @@ local function BuildHUB()
     registerPanelLayout(brainrotsPanel, "BrainrotsPanel", 160, 130)
 
     local ScrollingFrame = Instance.new("ScrollingFrame")
-    ScrollingFrame.Name = "ScrollingFrame"
+    ScrollingFrame.Name = "67"
     ScrollingFrame.Size = UDim2.new(1, -4, 1, -4)
     ScrollingFrame.Position = UDim2.new(0, 2, 0, 2)
     ScrollingFrame.BackgroundTransparency = 1
@@ -3124,13 +3083,14 @@ local function BuildHUB()
     scrollListRef = ScrollingFrame
 
     -- ==========================================
-    -- PANEL 4 : SETTINGS (sem Infinite Jump, sem Auto Grab, sem Auto Return Base, sem Auto Balloon, sem Keyboard Overlay)
+    -- PANEL 4 : SETTINGS
     -- ==========================================
     local SW = isMob and 320 or 380
     local SH = isMob and 350 or 420
 
     local settingsPanel, settingsContent, settingsHdr = makePanel(
-        "SettingsPanel", "SETTINGS",
+        "67",
+        "SETTINGS",
         math.floor(screenW / 2 + 14),
         math.floor(screenH * 0.10),
         SW, SH, 280, 280
@@ -3153,7 +3113,7 @@ local function BuildHUB()
     sCloseBtn.MouseButton1Click:Connect(function() settingsPanel.Visible = false end)
 
     -- ==========================================
-    -- COLOUR PICKER (mantido)
+    -- COLOUR PICKER
     -- ==========================================
     local colorAppliers = {}
     local function regColor(fn) table.insert(colorAppliers, fn) end
@@ -3483,13 +3443,13 @@ local function BuildHUB()
     end)
 
     -- ==========================================
-    -- ABAS VERTICAIS (mantido)
+    -- ABAS VERTICAIS
     -- ==========================================
     local TAB_PANEL_W = 52
     local TAB_BTN_H = 32
 
     local tabPanel = Instance.new("Frame")
-    tabPanel.Name = "TabPanel"
+    tabPanel.Name = "67"
     tabPanel.Size = UDim2.new(0, TAB_PANEL_W, 1, -10)
     tabPanel.Position = UDim2.new(0, 4, 0, 5)
     tabPanel.BackgroundTransparency = 1
@@ -3498,6 +3458,7 @@ local function BuildHUB()
     tabPanel.Parent = settingsContent
 
     local tabList = Instance.new("UIListLayout")
+    tabList.Name = "67"
     tabList.FillDirection = Enum.FillDirection.Vertical
     tabList.VerticalAlignment = Enum.VerticalAlignment.Top
     tabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -3533,7 +3494,7 @@ local function BuildHUB()
 
     local function makeTab(key, label, order)
         local btn = Instance.new("TextButton")
-        btn.Name = "Tab_" .. key
+        btn.Name = "67"
         btn.Size = UDim2.new(0, TAB_PANEL_W-8, 0, TAB_BTN_H)
         btn.BackgroundColor3 = C.card
         btn.BackgroundTransparency = 0.7
@@ -3564,7 +3525,7 @@ local function BuildHUB()
         lbl.Parent = btn
 
         local frame = Instance.new("ScrollingFrame")
-        frame.Name = "Tab_" .. key .. "_Content"
+        frame.Name = "67"
         frame.Size = UDim2.new(1, -(TAB_PANEL_W + 14), 1, -8)
         frame.Position = UDim2.new(0, TAB_PANEL_W + 6, 0, 4)
         frame.BackgroundTransparency = 1
@@ -3597,7 +3558,7 @@ local function BuildHUB()
     end
 
     makeTab("reset", "RESET", 1)
-    makeTab("flash", "FLASH TP", 2)
+    makeTab("flash", "FLASH", 2)
     makeTab("block", "BLOCK", 3)
     makeTab("misc", "MISC", 4)
     makeTab("visual", "VISUAL", 5)
@@ -3789,7 +3750,7 @@ local function BuildHUB()
         arrow.Parent = selectorBtn
 
         local list = Instance.new("Frame")
-        list.Name = "DropList"
+        list.Name = "67"
         list.Size = UDim2.new(0, 104, 0, #options * 24)
         list.BackgroundColor3 = C.panel
         list.BorderSizePixel = 0
@@ -3853,7 +3814,7 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- OUVERTURE SETTINGS (mantido)
+    -- OUVERTURE SETTINGS
     -- ==========================================
     local settingsOpen = false
     local function toggleSettings()
@@ -3871,7 +3832,7 @@ local function BuildHUB()
 
     if isMob then
         local mBtn = Instance.new("TextButton")
-        mBtn.Name = "SettingsBtn"
+        mBtn.Name = "67"
         mBtn.Size = UDim2.new(0, 36, 0, 36)
         mBtn.Position = UDim2.new(1, -46, 0, 10)
         mBtn.BackgroundColor3 = C.card
@@ -3894,7 +3855,7 @@ local function BuildHUB()
     TextLabel.Parent = HIGH_HUB_GUI
 
     -- ==========================================
-    -- PANEL 5 : QUICK ADMIN PANEL (mantido)
+    -- PANEL 5 : QUICK ADMIN PANEL
     -- ==========================================
     local QW = isMob and 300 or 340
     local QH = isMob and 220 or 260
@@ -3903,7 +3864,8 @@ local function BuildHUB()
     local centerY = math.floor(screenH / 2 - QH / 2)
 
     local qapPanel, qapContent, qapHdr = makePanel(
-        "QuickAPPanel", "QUICK ADMIN PANEL",
+        "67",
+        "QUICK ADMIN",
         centerX, centerY,
         QW, QH, 280, 60
     )
@@ -3926,7 +3888,7 @@ local function BuildHUB()
     qapPanel.Visible = _G.QuickAP or false
 
     local qapPlayerScroll = Instance.new("ScrollingFrame")
-    qapPlayerScroll.Name = "PlayerList"
+    qapPlayerScroll.Name = "67"
     qapPlayerScroll.Size = UDim2.new(1, -16, 1, -28)
     qapPlayerScroll.Position = UDim2.new(0, 6, 0, 6)
     qapPlayerScroll.BackgroundTransparency = 1
@@ -4099,7 +4061,7 @@ local function BuildHUB()
 
     local function createQAPPlayerRow(plr, order)
         local row = Instance.new("Frame")
-        row.Name = "QAP_" .. plr.Name
+        row.Name = "67"
         row.Size = UDim2.new(1, -8, 0, 40)
         row.BackgroundColor3 = C.card
         row.BackgroundTransparency = 0.6
@@ -4147,7 +4109,7 @@ local function BuildHUB()
 
         for i, cmd in ipairs(adminCommands) do
             local btn = Instance.new("TextButton")
-            btn.Name = "Cmd_" .. cmd.name
+            btn.Name = "67"
             btn.Size = UDim2.new(0, btnSize, 0, btnSize)
             btn.AnchorPoint = Vector2.new(1, 0.5)
             btn.Position = UDim2.new(1, -((#adminCommands - i) * (btnSize + btnGap) + 8), 0.5, 0)
@@ -4256,7 +4218,7 @@ local function BuildHUB()
     end)
 
     -- ==========================================
-    -- CONTENU SETTINGS (sans Infinite Jump, sans Auto Grab, sans Auto Return Base, sans Auto Balloon, sans Keyboard Overlay)
+    -- CONTENU SETTINGS
     -- ==========================================
     settingsGetters = {
         AutoResetOnBalloon = function() return _G.AutoResetOnBalloon end,
@@ -4305,7 +4267,7 @@ local function BuildHUB()
     end)
 
     -- ==========================================
-    -- TAB : FLASH TP
+    -- TAB : FLASH
     -- ==========================================
     sectionHeader(ScrollFlash, "  FLASH TP  ")
     toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v) _G.AutoFlashTP = v end)
@@ -4321,7 +4283,7 @@ local function BuildHUB()
     do
         sectionOrder += 1
         local lagLblRow = Instance.new("Frame")
-        lagLblRow.Name = "LaggerPowerRow"
+        lagLblRow.Name = "67"
         lagLblRow.Size = UDim2.new(0.92, 0, 0, 36)
         lagLblRow.AnchorPoint = Vector2.new(0.5, 0)
         lagLblRow.Position = UDim2.new(0.5, 0, 0, 0)
@@ -4403,7 +4365,7 @@ local function BuildHUB()
     do
         sectionOrder += 1
         local speedLblRow = Instance.new("Frame")
-        speedLblRow.Name = "FlashSpeedRow"
+        speedLblRow.Name = "67"
         speedLblRow.Size = UDim2.new(0.92, 0, 0, 36)
         speedLblRow.AnchorPoint = Vector2.new(0.5, 0)
         speedLblRow.Position = UDim2.new(0.5, 0, 0, 0)
@@ -4517,7 +4479,7 @@ local function BuildHUB()
         for i, info in ipairs(modes) do
             sectionOrder += 1
             local mbtn = Instance.new("TextButton")
-            mbtn.Name = "ModeBtn_" .. info.key
+            mbtn.Name = "67"
             mbtn.Size = UDim2.new(0.92, 0, 0, 26)
             mbtn.AnchorPoint = Vector2.new(0.5, 0)
             mbtn.Position = UDim2.new(0.5, 0, 0, 0)
@@ -4560,7 +4522,7 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- TAB : MISC (sans Infinite Jump, sans Auto Grab, sans Auto Return Base, sans Auto Balloon, sans Keyboard Overlay)
+    -- TAB : MISC
     -- ==========================================
     sectionHeader(ScrollMisc, "  MISC  ")
     toggleRow(ScrollMisc, "Anti Ragdoll", antiRagdollEnabled, function(v)
