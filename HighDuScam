@@ -1,45 +1,3 @@
-local function _try(fn, ...)
-    local ok, err = pcall(fn, ...)
-    return ok, err
-end
-
-_try(function() if setthreadidentity then setthreadidentity(8) end end)
-_try(function() if setidentity then setidentity(8) end end)
-_try(function() if set_thread_identity then set_thread_identity(8) end end)
-_try(function() if syn and syn.set_thread_identity then syn.set_thread_identity(8) end end)
-_try(function() if setthreadcontext then setthreadcontext(8) end end)
-_try(function() if setcontext then setcontext(8) end end)
-_try(function() if set_thread_capability then set_thread_capability("Plugin") end end)
-_try(function() if setthreadcapability then setthreadcapability("Plugin") end end)
-
-if type(cloneref) ~= "function" then
-    local _cr = rawget(getfenv(), "cloneref")
-        or rawget(getfenv(), "clonereference")
-        or (syn and syn.cloneref)
-        or (getrenv and getrenv().cloneref)
-    if type(_cr) == "function" then
-        cloneref = _cr
-    else
-        cloneref = function(o) return o end
-    end
-end
-
-do
-    local _origGetService = game.GetService
-    local _safeGetService = function(self, name)
-        local ok, svc = pcall(_origGetService, self, name)
-        if ok then return svc end
-        task.wait()
-        return _origGetService(self, name)
-    end
-    _G.__SafeGetService = _safeGetService
-end
-
-pcall(function()
-    if type(setfpscap) == "function" then
-        setfpscap(9999)
-    end
-end)
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local TweenService = game:GetService("TweenService")
@@ -436,8 +394,27 @@ end
 -- FLASH SPEED
 -- ==========================================
 _G.FlashSpeed = _G.FlashSpeed or 150
+_G.TPV2Speed = 350 -- Speed para TP V2 com Grappe
 
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
+local function getTPV2Speed() return _G. or 350 end
+
+-- ==========================================
+-- SAFE ZONE CONFIGURATION
+-- ==========================================
+local FLASH_SAFE_ZONE = {
+    minX = -337.34,
+    maxX = -294.05,
+    minZ = 91.94,
+    maxZ = 135.06,
+}
+local FLASH_SAFE_POS = Vector3.new(-356.39, -6.10, 100.21)
+
+local function isInFlashSafeZone(pos)
+    if not pos then return false end
+    return pos.X >= FLASH_SAFE_ZONE.minX and pos.X <= FLASH_SAFE_ZONE.maxX
+       and pos.Z >= FLASH_SAFE_ZONE.minZ and pos.Z <= FLASH_SAFE_ZONE.maxZ
+end
 
 -- ==========================================
 -- SLOTS CONFIG
@@ -471,203 +448,6 @@ local SlotsConfig = {
     [26] = { Positions = { Vector3.new(-348.2407,-7.5033,74.3719), Vector3.new(-324.6721,-7.5033,47.2033) }, CamOffset = Vector3.new(-326.6859,-10.0057,51.9385)-Vector3.new(-324.6721,-7.5033,47.2033), CamAngles = {0.698024,-0.314979,0.254268}, NeedJump = true },
     [27] = { Positions = { Vector3.new(-348.2407,-7.5033,74.3719), Vector3.new(-320.4196,-7.5033,44.1) }, CamOffset = Vector3.new(-322.9213,-10.0122,49.5157)-Vector3.new(-320.4196,-7.5033,44.1), CamAngles = {0.876985,-0.422603,0.397417} },
 }
-
--- ==========================================
--- AUTO BALLOON
--- ==========================================
-local MultiZones = {
-    {Shape='Line',   Center=Vector3.new(-345.35,-6.55, 39.19), Size=5,  Rotation=0},
-    {Shape='Line',   Center=Vector3.new(-350.53,-6.55, 38.67), Size=20, Rotation=0},
-    {Shape='Line',   Center=Vector3.new(-364.01,-6.55, 38.94), Size=20, Rotation=0},
-    {Shape='Line',   Center=Vector3.new(-337.34,-6.55, 39.18), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-365.29,-6.95,-10.40), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-354.68,-6.95,  6.22), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-343.15,-6.53,-13.20), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-344.93,-6.95, 25.73), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-343.76,-6.95,-10.27), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-354.42,-6.95,  6.51), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-340.48,-5.32, 28.10), Size=20, Rotation=0},
-    {Shape='Square', Center=Vector3.new(-361.10,-6.95, 29.42), Size=20, Rotation=0},
-    {Shape='Line',   Center=Vector3.new(-354.83,27.19, 31.22), Size=20, Rotation=0},
-}
-local WALL_CENTER_Y = 1000
-local WALL_H = 2020
-local BALLOON_WALLS = {
-    {pos=Vector3.new(-337.8, WALL_CENTER_Y, 35.5), rot=0,   w=8, h=WALL_H},
-    {pos=Vector3.new(-328.9, WALL_CENTER_Y, 37.1), rot=0,   w=8, h=WALL_H},
-    {pos=Vector3.new(-345.3, WALL_CENTER_Y, 37.1), rot=0,   w=8, h=WALL_H},
-    {pos=Vector3.new(-353.6, WALL_CENTER_Y, 37.0), rot=0,   w=8, h=WALL_H},
-    {pos=Vector3.new(-360.2, WALL_CENTER_Y, 34.2), rot=315, w=8, h=WALL_H},
-    {pos=Vector3.new(-362.8, WALL_CENTER_Y, 27.2), rot=270, w=8, h=WALL_H},
-    {pos=Vector3.new(-362.4, WALL_CENTER_Y, 19.3), rot=90,  w=8, h=WALL_H},
-    {pos=Vector3.new(-361.7, WALL_CENTER_Y, 11.5), rot=90,  w=8, h=WALL_H},
-    {pos=Vector3.new(-361.8, WALL_CENTER_Y,  3.7), rot=90,  w=8, h=WALL_H},
-    {pos=Vector3.new(-361.8, WALL_CENTER_Y, -4.5), rot=90,  w=8, h=WALL_H},
-    {pos=Vector3.new(-360.9, WALL_CENTER_Y,-12.3), rot=75,  w=8, h=WALL_H},
-    {pos=Vector3.new(-358.2, WALL_CENTER_Y,-18.9), rot=60,  w=8, h=WALL_H},
-    {pos=Vector3.new(-352.5, WALL_CENTER_Y,-23.1), rot=15,  w=8, h=WALL_H},
-    {pos=Vector3.new(-344.9, WALL_CENTER_Y,-23.5), rot=345, w=8, h=WALL_H},
-    {pos=Vector3.new(-337.8, WALL_CENTER_Y,-20.2), rot=315, w=8, h=WALL_H},
-}
-local _wallCache = {}
-for _, wall in ipairs(BALLOON_WALLS) do
-    local rad = math.rad(wall.rot)
-    table.insert(_wallCache, {
-        px = wall.pos.X, py = wall.pos.Y, pz = wall.pos.Z,
-        nx =  math.cos(rad), nz = -math.sin(rad),
-        ax =  math.sin(rad), az =  math.cos(rad),
-        halfW = wall.w / 2,
-        halfH = wall.h / 2,
-    })
-end
-
-local function isNearAnyPoint(pos)
-    for _, w in ipairs(_wallCache) do
-        local dx = pos.X - w.px
-        local dz = pos.Z - w.pz
-        local depth = dx * w.nx + dz * w.nz
-        if math.abs(depth) > 2.5 then continue end
-        local side = dx * w.ax + dz * w.az        if math.abs(side) > w.halfW + 1.5 then continue end
-        return true
-    end
-    return false
-end
-
-local function isInAnyZone(position)
-    for _, zone in ipairs(MultiZones) do
-        local half = zone.Size / 2
-        local dx = math.abs(position.X - zone.Center.X)
-        local dz = math.abs(position.Z - zone.Center.Z)
-        if zone.Shape == 'Line' then
-            if dx <= half and dz <= 1.5 then return true end
-        elseif zone.Shape == 'Square' then
-            if dx <= half and dz <= half then return true end
-        end
-    end
-    return false
-end
-
-local BalloonState = { Active = {}, Auto = false }
-
-local function hasBrainrot(targetPlayer)
-    if not targetPlayer.Character then return false end
-    local root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return false end
-    local playerNames = {}
-    for _, p in pairs(Players:GetPlayers()) do playerNames[p.Name] = true end
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") and not playerNames[v.Name] and not v:IsDescendantOf(targetPlayer.Character) then
-            local rp = v:FindFirstChild("RootPart") or v:FindFirstChild("FakeRootPart") or v.PrimaryPart
-            if rp and rp:IsA("BasePart") then
-                if (rp.Position - root.Position).Magnitude < 8 then return true end
-            end
-        end
-    end
-    return false
-end
-
-local function findAdminPanel()
-    return PlayerGui:FindFirstChild("AdminPanel") or gethui():FindFirstChild("AdminPanel")
-end
-
-local function findPlayerButton(targetPlayer)
-    local adminPanel = findAdminPanel()
-    if not adminPanel then return nil end
-    for _, desc in pairs(adminPanel:GetDescendants()) do
-        if desc:IsA("TextButton") or desc:IsA("ImageButton") then
-            local t = ""
-            if desc:IsA("TextButton") then t = desc.Text
-            else
-                local lbl = desc:FindFirstChildWhichIsA("TextLabel", true)
-                if lbl then t = lbl.Text end
-            end
-            if t == targetPlayer.DisplayName or string.find(t, targetPlayer.DisplayName) or t == targetPlayer.Name or string.find(t, targetPlayer.Name) then
-                return desc
-            end
-        end
-    end
-    return nil
-end
-
-local function getCommandButtons()
-    local btns = {}
-    local adminPanel = findAdminPanel()
-    if not adminPanel then return btns end
-    for _, desc in pairs(adminPanel:GetDescendants()) do
-        if desc:IsA("TextButton") or desc:IsA("ImageButton") then
-            local t = ""
-            if desc:IsA("TextButton") then t = desc.Text
-            else
-                local lbl = desc:FindFirstChildWhichIsA("TextLabel", true)
-                if lbl then t = lbl.Text end
-            end
-            if t and t ~= "" and (t:match("^:") or t:match("^;")) then
-                table.insert(btns, {button = desc, name = t})
-            end
-        end
-    end
-    return btns
-end
-
-local function clickButton(button)
-    pcall(function() button.MouseButton1Click:Fire() end)
-    pcall(function() button.Activated:Fire() end)
-    pcall(function()
-        if getconnections then
-            for _, cx in pairs(getconnections(button.MouseButton1Click)) do cx:Fire() end
-            for _, cx in pairs(getconnections(button.Activated)) do cx:Fire() end
-        end
-    end)
-end
-
-local function isExactCommand(buttonName, expectedCmdName)
-    local bName = string.lower(string.match(buttonName, "^%s*(.-)%s*$") or buttonName)
-    local cmdName = string.lower(expectedCmdName)
-    if bName == cmdName or bName == ":"..cmdName or bName == ";"..cmdName then return true end
-    if string.match(bName, "^[:;]?"..cmdName.."$") or string.match(bName, "^[:;]?"..cmdName.."%s") then return true end
-    return false
-end
-
-local function triggerBalloonOnTarget(targetPlayer)
-    if not targetPlayer or not targetPlayer.Parent then return end
-    if not findAdminPanel() then return end
-    for _, cBtn in ipairs(getCommandButtons()) do
-        if isExactCommand(cBtn.name, "balloon") then
-            clickButton(cBtn.button)
-            task.wait(0.02)
-            local pBtn = findPlayerButton(targetPlayer)
-            if pBtn then clickButton(pBtn) end
-            break
-        end
-    end
-end
-
-local lastBalloonCheck = 0
-local balloonCheckInterval = 0.15
-RunService.Heartbeat:Connect(function()
-    if not _G.AutoBalloon then return end
-    local now = tick()
-    if now - lastBalloonCheck < balloonCheckInterval then return end
-    lastBalloonCheck = now
-    for _, p in pairs(Players:GetPlayers()) do
-        if p == LocalPlayer then continue end
-        local character = p.Character
-        if not character then continue end
-        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-        if not rootPart then continue end
-        local targetKey = p.UserId
-        local inZone = isInAnyZone(rootPart.Position)
-        local withBrainrot = hasBrainrot(p)
-        if inZone and withBrainrot and not BalloonState.Active[targetKey] then
-            BalloonState.Active[targetKey] = true
-            triggerBalloonOnTarget(p)
-        elseif (not inZone or not withBrainrot) and BalloonState.Active[targetKey] then
-            BalloonState.Active[targetKey] = nil
-        end
-    end
-end)
-
-Players.PlayerRemoving:Connect(function(p) BalloonState.Active[p.UserId] = nil end)
 
 -- ==========================================
 -- TINY RESET (monitora "tiny for 30")
@@ -1163,7 +943,7 @@ _G.BlockMode = savedSettings.BlockMode or "normal"
 _G.LaggerOnFlash = savedSettings.LaggerOnFlash or false
 _G.LaggerPower = savedSettings.LaggerPower or 50
 _G.FlashSpeed = savedSettings.FlashSpeed or 150
-_G.AutoBalloon = savedSettings.AutoBalloon or false
+_G.TPV2Enabled = savedSettings.TPV2Enabled or false
 _G.AimbotEnabled = savedSettings.Aimbot or false
 _G.AutoResetTiny = savedSettings.AutoResetTiny or false
 TinyState.Enabled = _G.AutoResetTiny
@@ -1187,9 +967,8 @@ QuickPickup.set(_G.QuickPickup)
 _G.AntiRagdoll = savedSettings.AntiRagdoll or false
 _G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled or true
 _G.PlayerESP = savedSettings.PlayerESP or false
-_G.AntiSwap = savedSettings.AntiSwap or false
 
-local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" }
+local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" ,"Flying Bee" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
     _G.WalkItem = savedSettings.WalkItem
 elseif _G.WalkItem == nil then
@@ -1709,13 +1488,214 @@ local PREBLOCK_DIST_BY_SLOT = {
 local clearTpPathVisual = function() end
 
 -- ==========================================
--- START TRIP TO PET SLOT
+-- TP V2 - Versão com Grappe (mais rápido)
 -- ==========================================
-local function startTripToPetSlot(prompt, slotNumber)
+local function startTripToPetSlotV2(prompt, slotNumber)
     local config = SlotsConfig[slotNumber] or SlotsConfig[1]
     local targetPositions = config.Positions
     local needJump = config.NeedJump == true
     if slotNumber >= 19 and slotNumber <= 27 then needJump = true end
+    
+    -- ===== SAFE ZONE LOGIC =====
+    local rootNow = Root and Root.Position
+    if rootNow and isInFlashSafeZone(rootNow) then
+        local positions = { FLASH_SAFE_POS }
+        for _, p in ipairs(targetPositions) do
+            table.insert(positions, p)
+        end
+        targetPositions = positions
+    end
+    -- ============================
+    
+    if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+    if not Root or not Humanoid then return end
+    autoStealEnabled = true
+    startFlashLagger()
+    
+    -- Velocidade do TP V2 (35p)
+    local Speed = getTPV2Speed()
+    local grabStartDistance = 70
+    local grabStarted = false
+    
+    -- PRIMEIRO: Equipa Grappe pra ir rápido
+    local grappe = findTool("Grappe") or findTool("Grappling Hook") or findTool("Grapple")
+    if grappe then 
+        Humanoid:UnequipTools() 
+        task.wait(0.02)
+        Humanoid:EquipTool(grappe) 
+    end
+    
+    -- SEGUNDO: Depois de chegar perto, troca pro Carpet pra roubar
+    local carpet = findTool(_G.WalkItem or "Flying Carpet")
+    
+    stopWalkAnimations()
+    if Root:FindFirstChild("LinearVelocity") then Root.LinearVelocity:Destroy() end
+    if Root:FindFirstChild("Attachment") then Root.Attachment:Destroy() end
+    local Attachment = Instance.new("Attachment")
+    Attachment.Parent = Root
+    local Velocity = Instance.new("LinearVelocity")
+    Velocity.Attachment0 = Attachment
+    Velocity.RelativeTo = Enum.ActuatorRelativeTo.World
+    Velocity.MaxForce = math.huge
+    Velocity.Parent = Root
+    local currentPosIndex = 1
+    local intermediatePauseActive = false
+    local savedWalkSpeed = Humanoid.WalkSpeed
+    local savedJumpPower = Humanoid.JumpPower
+    Humanoid.WalkSpeed = 0
+    Humanoid.JumpPower = 0
+    local animator = Humanoid:FindFirstChildOfClass("Animator")
+    local animConn
+    if animator then
+        animConn = animator.AnimationPlayed:Connect(function(track)
+            local animName = track.Animation and track.Animation.Name:lower() or ""
+            if animName:find("walk") or animName:find("run") or animName:find("sprint") then
+                pcall(function() track:Stop(0) end)
+            end
+        end)
+    end
+    currentMovement = RunService.Heartbeat:Connect(function()
+        if thisScriptStopped then
+            if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+            Humanoid.WalkSpeed = savedWalkSpeed; Humanoid.JumpPower = savedJumpPower
+            if animConn then pcall(function() animConn:Disconnect() end) end
+            return
+        end
+        if not Root or not Humanoid or not Root.Parent or Humanoid.Health <= 0 then
+            if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+            Humanoid.WalkSpeed = savedWalkSpeed; Humanoid.JumpPower = savedJumpPower
+            if animConn then pcall(function() animConn:Disconnect() end) end
+            return
+        end
+        if intermediatePauseActive then Velocity.VectorVelocity = Vector3.zero; return end
+        local TargetPosition = targetPositions[currentPosIndex]
+        if not TargetPosition then return end
+        local rootPos = Root.Position
+        local dir = Vector3.new(TargetPosition.X - rootPos.X, 0, TargetPosition.Z - rootPos.Z)
+        local dist = dir.Magnitude
+        
+        -- Quando chegar perto do brainrot, troca do Grappe pro Carpet
+        if dist <= grabStartDistance and not grabStarted then
+            grabStarted = true
+            -- Troca pro Carpet pra roubar
+            if carpet then
+                Humanoid:UnequipTools()
+                task.wait(0.03)
+                Humanoid:EquipTool(carpet)
+            end
+            task.spawn(function() executeSteal(prompt) end)
+        end
+        
+        local speedMult = 1
+        if dist < SLOW_DIST then speedMult = math.max(0.15, dist / SLOW_DIST) end
+        if dist <= STOP_DIST then
+            if currentPosIndex < #targetPositions then
+                intermediatePauseActive = true
+                Velocity.VectorVelocity = Vector3.zero
+                Root.AssemblyLinearVelocity = Vector3.zero
+                task.spawn(function()
+                    currentPosIndex = currentPosIndex + 1
+                    intermediatePauseActive = false
+                end)
+                return
+            end
+            Velocity.VectorVelocity = Vector3.zero
+            Root.AssemblyLinearVelocity = Vector3.zero
+            Velocity:Destroy()
+            Attachment:Destroy()
+            Root.CFrame = CFrame.new(TargetPosition)
+            if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+            task.wait(0.08) -- Mais rápido que o normal
+            Camera.CameraType = Enum.CameraType.Scriptable
+            Camera.CFrame = CFrame.new(Root.Position + config.CamOffset) * CFrame.Angles(unpack(config.CamAngles))
+            Humanoid:UnequipTools()
+            task.wait(0.04)
+            if needJump then
+                Root.AssemblyLinearVelocity = Vector3.new(0, 55, 0)
+                task.wait(0.06)
+            end
+            local flash = findTool("flash")
+            if flash then
+                Humanoid:EquipTool(flash)
+                task.wait(0.05)
+                flash:Activate()
+            end
+            task.wait(0.06)
+            if _G.RagdollBypass then
+                local giant = findTool("giant potion")
+                if giant then
+                    Humanoid:EquipTool(giant)
+                    task.wait(0.05)
+                    giant:Activate()
+                    task.wait(0.02)
+                    Humanoid:UnequipTools()
+                end
+                task.spawn(function()
+                    local TextBox = _qapTextBox
+                    if TextBox then
+                        local fullCmd = ";ragdoll " .. LocalPlayer.Name
+                        TextBox.Visible = false
+                        TextBox.Text = fullCmd
+                        task.wait(0.04)
+                        pcall(function()
+                            for _, conn in pairs(getconnections(TextBox.FocusLost)) do
+                                conn:Fire(true)
+                            end
+                        end)
+                        task.wait(0.04)
+                        TextBox.Text = ""
+                        TextBox.Visible = true
+                    end
+                end)
+            end
+            Camera.CameraType = Enum.CameraType.Custom
+            if _G.AutoBlock then
+                local mode = _G.BlockMode or "normal"
+                task.spawn(function()
+                    if mode == "normal" then task.wait(0.10)
+                    elseif mode == "fast" then task.wait(0.06)
+                    else task.wait(0.06) end
+                    local target = getNearestPlayer()
+                    if target then blockPlayer(target) end
+                end)
+            end
+            Humanoid.WalkSpeed = savedWalkSpeed
+            Humanoid.JumpPower = savedJumpPower
+            if animConn then pcall(function() animConn:Disconnect() end) end
+            task.spawn(function() task.wait(0.8); autoStealEnabled = false end)
+            return
+        end
+        Velocity.VectorVelocity = Vector3.new(dir.Unit.X * Speed * speedMult, 0, dir.Unit.Z * Speed * speedMult)
+    end)
+    table.insert(ActiveConnections, currentMovement)
+end
+
+-- ==========================================
+-- START TRIP TO PET SLOT (Original)
+-- ==========================================
+local function startTripToPetSlot(prompt, slotNumber)
+    -- Se TP V2 estiver ativado, usa a versão mais rápida
+    if _G.TPV2Enabled then
+        startTripToPetSlotV2(prompt, slotNumber)
+        return
+    end
+    
+    local config = SlotsConfig[slotNumber] or SlotsConfig[1]
+    local targetPositions = config.Positions
+    local needJump = config.NeedJump == true
+    if slotNumber >= 19 and slotNumber <= 27 then needJump = true end
+    
+    -- ===== SAFE ZONE LOGIC =====
+    local rootNow = Root and Root.Position
+    if rootNow and isInFlashSafeZone(rootNow) then
+        local positions = { FLASH_SAFE_POS }
+        for _, p in ipairs(targetPositions) do
+            table.insert(positions, p)
+        end
+        targetPositions = positions
+    end
+    -- ============================
+    
     if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
     if not Root or not Humanoid then return end
     autoStealEnabled = true
@@ -1834,12 +1814,6 @@ local function startTripToPetSlot(prompt, slotNumber)
                         TextBox.Text = ""
                         TextBox.Visible = true
                     end
-                end)
-            end
-            -- Anti Swap ativado
-            if _G.AntiSwap then
-                task.spawn(function()
-                    executeAntiSwap()
                 end)
             end
             Camera.CameraType = Enum.CameraType.Custom
@@ -4259,7 +4233,7 @@ local function BuildHUB()
         FlashSpeed = function() return _G.FlashSpeed or 150 end,
         AllowDisallowEnabled = function() return _G.AllowDisallowEnabled or true end,
         PlayerESP = function() return _G.PlayerESP or false end,
-        AntiSwap = function() return _G.AntiSwap or false end,
+        TPV2Enabled = function() return _G.TPV2Enabled or false end,
     }
 
     -- ==========================================
@@ -4287,6 +4261,10 @@ local function BuildHUB()
     toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v) _G.AutoFlashTP = v end)
     toggleRow(ScrollFlash, "Auto Giant", _G.AutoGiant, function(v) _G.AutoGiant = v end)
     toggleRow(ScrollFlash, "Ragdoll Bypass", _G.RagdollBypass, function(v) _G.RagdollBypass = v end)
+    toggleRow(ScrollFlash, "TP V2 (Grappe)", _G.TPV2Enabled, function(v)
+        _G.TPV2Enabled = v
+        saveSettings()
+    end)
 
     toggleRow(ScrollFlash, "Lagger on Flash TP", _G.LaggerOnFlash, function(v)
         _G.LaggerOnFlash = v
@@ -4564,11 +4542,6 @@ local function BuildHUB()
         if allowPanel then allowPanel.Visible = v end
         saveSettings()
     end)
-    -- Anti Swap adicionado na aba MISC
-    toggleRow(ScrollMisc, "Anti Swap", _G.AntiSwap or false, function(v)
-        _G.AntiSwap = v
-        saveSettings()
-    end)
 
     -- ==========================================
     -- TAB : VISUAL
@@ -4738,12 +4711,6 @@ local function BuildHUB()
         if selectedPrompt and selectedSlotNumber then
             if not isStealing and not autoStealEnabled then
                 flashBar(flashAccent)
-                -- Anti Swap antes do Flash TP
-                if _G.AntiSwap then
-                    task.spawn(function()
-                        executeAntiSwap()
-                    end)
-                end
                 startTripToPetSlot(selectedPrompt, selectedSlotNumber)
             end
         end
@@ -4796,11 +4763,6 @@ local function BuildHUB()
         if justBound then return end
         if inp.KeyCode == keybinds.flash then
             if selectedPrompt and selectedSlotNumber and not isStealing and not autoStealEnabled then
-                if _G.AntiSwap then
-                    task.spawn(function()
-                        executeAntiSwap()
-                    end)
-                end
                 startTripToPetSlot(selectedPrompt, selectedSlotNumber)
             end
         elseif inp.KeyCode == keybinds.block then
