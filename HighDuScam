@@ -394,10 +394,10 @@ end
 -- FLASH SPEED
 -- ==========================================
 _G.FlashSpeed = _G.FlashSpeed or 150
-_G.TPV2Speed = 350 -- Speed para TP V2 com Grappe
+_G.TPV2Speed = 450 -- Speed para TP V2 com Grappe
 
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
-local function getTPV2Speed() return _G. or 350 end
+local function getTPV2Speed() return _G.TPV2Speed or 450 end
 
 -- ==========================================
 -- SAFE ZONE CONFIGURATION
@@ -1512,7 +1512,7 @@ local function startTripToPetSlotV2(prompt, slotNumber)
     autoStealEnabled = true
     startFlashLagger()
     
-    -- Velocidade do TP V2 (35p)
+    -- Velocidade do TP V2 (450)
     local Speed = getTPV2Speed()
     local grabStartDistance = 70
     local grabStarted = false
