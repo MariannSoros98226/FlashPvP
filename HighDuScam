@@ -18,6 +18,19 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local VirtualInput = Instance.new("VirtualInputManager")
 
+-- ==========================================
+-- SAFE GUI PARENT (Fallback para auto-execute)
+-- ==========================================
+local function getSafeGui()
+    local success, result = pcall(function() return gethui() end)
+    if success and result then
+        return result
+    end
+    return CoreGui
+end
+
+local SAFE_GUI = getSafeGui()
+
 local ActiveConnections = {}
 local thisScriptStopped = false
 
@@ -251,7 +264,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- AUTO RESET (Balloon / Tiny / Jail) - 100% do NOX
+-- AUTO RESET (Balloon / Tiny / Jail)
 -- ==========================================
 do
     local cooldown = false
@@ -394,7 +407,7 @@ end
 -- FLASH SPEED
 -- ==========================================
 _G.FlashSpeed = _G.FlashSpeed or 150
-_G.TPV2Speed = 450 -- Speed para TP V2 com Grappe
+_G.TPV2Speed = 450
 
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
 local function getTPV2Speed() return _G.TPV2Speed or 450 end
@@ -450,7 +463,7 @@ local SlotsConfig = {
 }
 
 -- ==========================================
--- TINY RESET (monitora "tiny for 30")
+-- TINY RESET
 -- ==========================================
 local TinyState = { Enabled = false, Conns = {}, BoundRemotes = {}, AddConn = nil, LastFire = 0 }
 
@@ -503,7 +516,7 @@ local function stopAutoResetTiny()
 end
 
 -- ==========================================
--- JAIL RESET (monitora "trapped for")
+-- JAIL RESET
 -- ==========================================
 local JailState = { Enabled = false, Conns = {}, BoundRemotes = {}, AddConn = nil, LastFire = 0 }
 
@@ -647,6 +660,139 @@ local QuickPickup = (function()
     end
     return M
 end)()
+
+-- ==========================================
+-- AUTO CARPET SPEED (Misc)
+-- ==========================================
+local HH_AutoCarpet = { 
+    enabled = false, 
+    conn = nil, 
+    speed = 140 
+}
+
+local function hhIsCarpetTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local n = tool.Name:lower()
+    return n:find("carpet", 1, true) or n:find("broom", 1, true) or n:find("wing", 1, true) or 
+           n:find("sleigh", 1, true) or n:find("waverider", 1, true) or n:find("hover", 1, true) or
+           n:find("flying", 1, true)
+end
+
+local function hhStartAutoCarpet()
+    if HH_AutoCarpet.conn then return end
+    HH_AutoCarpet.enabled = true
+    HH_AutoCarpet.conn = RunService.Heartbeat:Connect(function()
+        if not HH_AutoCarpet.enabled then return end
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not hum or not root then return end
+        
+        local equipped = false
+        if char then
+            for _, tool in ipairs(char:GetChildren()) do
+                if hhIsCarpetTool(tool) then equipped = true; break end
+            end
+        end
+        if equipped then
+            local dir = hum.MoveDirection
+            if dir.Magnitude > 0 then
+                root.AssemblyLinearVelocity = Vector3.new(dir.X * HH_AutoCarpet.speed, root.AssemblyLinearVelocity.Y, dir.Z * HH_AutoCarpet.speed)
+            else
+                root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
+            end
+        end
+    end)
+end
+
+local function hhStopAutoCarpet()
+    HH_AutoCarpet.enabled = false
+    if HH_AutoCarpet.conn then
+        HH_AutoCarpet.conn:Disconnect()
+        HH_AutoCarpet.conn = nil
+    end
+end
+
+-- ==========================================
+-- ANTI DIE (Visual)
+-- ==========================================
+local antiDieEnabled = false
+local antiDieConnections = {}
+
+local function startAntiDie()
+    if antiDieEnabled then return end
+    antiDieEnabled = true
+    
+    local function antiDieHandler()
+        if not antiDieEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        
+        if hum.Health <= 0 then
+            pcall(function()
+                hum.Health = 100
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end)
+        end
+        
+        local state = hum:GetState()
+        if state == Enum.HumanoidStateType.Physics or 
+           state == Enum.HumanoidStateType.Ragdoll or
+           state == Enum.HumanoidStateType.FallingDown or
+           state == Enum.HumanoidStateType.Dead then
+            pcall(function()
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+                hum.PlatformStand = false
+                hum.Sit = false
+                hum.Health = 100
+            end)
+        end
+    end
+    
+    local heartbeatConn = RunService.Heartbeat:Connect(antiDieHandler)
+    table.insert(antiDieConnections, heartbeatConn)
+    
+    local function hookCharacter(char)
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        
+        local stateConn = hum.StateChanged:Connect(function(_, newState)
+            if not antiDieEnabled then return end
+            if newState == Enum.HumanoidStateType.Dead then
+                pcall(function()
+                    hum.Health = 100
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end)
+            end
+        end)
+        table.insert(antiDieConnections, stateConn)
+    end
+    
+    if LocalPlayer.Character then
+        hookCharacter(LocalPlayer.Character)
+    end
+    
+    local charAddedHook = LocalPlayer.CharacterAdded:Connect(function(char)
+        task.wait(0.1)
+        if antiDieEnabled then
+            hookCharacter(char)
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum.Health = 100 end
+        end
+    end)
+    table.insert(antiDieConnections, charAddedHook)
+end
+
+local function stopAntiDie()
+    antiDieEnabled = false
+    for _, conn in ipairs(antiDieConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    antiDieConnections = {}
+end
 
 -- ==========================================
 -- SETTINGS LOAD/SAVE
@@ -967,6 +1113,8 @@ QuickPickup.set(_G.QuickPickup)
 _G.AntiRagdoll = savedSettings.AntiRagdoll or false
 _G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled or true
 _G.PlayerESP = savedSettings.PlayerESP or false
+_G.AutoCarpetSpeed = savedSettings.AutoCarpetSpeed or false
+_G.AntiDie = savedSettings.AntiDie or false
 
 local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" ,"Flying Bee" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
@@ -993,7 +1141,7 @@ local clampVelocity = 25
 local maxClamp = 15
 
 -- ==========================================
--- PLAYER ESP (Cor Rosa, Modo Esqueleto, Nome Acima)
+-- PLAYER ESP
 -- ==========================================
 local playerEspInstances = {}
 
@@ -1496,7 +1644,6 @@ local function startTripToPetSlotV2(prompt, slotNumber)
     local needJump = config.NeedJump == true
     if slotNumber >= 19 and slotNumber <= 27 then needJump = true end
     
-    -- ===== SAFE ZONE LOGIC =====
     local rootNow = Root and Root.Position
     if rootNow and isInFlashSafeZone(rootNow) then
         local positions = { FLASH_SAFE_POS }
@@ -1505,19 +1652,16 @@ local function startTripToPetSlotV2(prompt, slotNumber)
         end
         targetPositions = positions
     end
-    -- ============================
     
     if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
     if not Root or not Humanoid then return end
     autoStealEnabled = true
     startFlashLagger()
     
-    -- Velocidade do TP V2 (450)
     local Speed = getTPV2Speed()
     local grabStartDistance = 70
     local grabStarted = false
     
-    -- PRIMEIRO: Equipa Grappe pra ir rápido
     local grappe = findTool("Grappe") or findTool("Grappling Hook") or findTool("Grapple")
     if grappe then 
         Humanoid:UnequipTools() 
@@ -1525,7 +1669,6 @@ local function startTripToPetSlotV2(prompt, slotNumber)
         Humanoid:EquipTool(grappe) 
     end
     
-    -- SEGUNDO: Depois de chegar perto, troca pro Carpet pra roubar
     local carpet = findTool(_G.WalkItem or "Flying Carpet")
     
     stopWalkAnimations()
@@ -1574,10 +1717,8 @@ local function startTripToPetSlotV2(prompt, slotNumber)
         local dir = Vector3.new(TargetPosition.X - rootPos.X, 0, TargetPosition.Z - rootPos.Z)
         local dist = dir.Magnitude
         
-        -- Quando chegar perto do brainrot, troca do Grappe pro Carpet
         if dist <= grabStartDistance and not grabStarted then
             grabStarted = true
-            -- Troca pro Carpet pra roubar
             if carpet then
                 Humanoid:UnequipTools()
                 task.wait(0.03)
@@ -1605,7 +1746,7 @@ local function startTripToPetSlotV2(prompt, slotNumber)
             Attachment:Destroy()
             Root.CFrame = CFrame.new(TargetPosition)
             if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
-            task.wait(0.08) -- Mais rápido que o normal
+            task.wait(0.08)
             Camera.CameraType = Enum.CameraType.Scriptable
             Camera.CFrame = CFrame.new(Root.Position + config.CamOffset) * CFrame.Angles(unpack(config.CamAngles))
             Humanoid:UnequipTools()
@@ -1674,7 +1815,6 @@ end
 -- START TRIP TO PET SLOT (Original)
 -- ==========================================
 local function startTripToPetSlot(prompt, slotNumber)
-    -- Se TP V2 estiver ativado, usa a versão mais rápida
     if _G.TPV2Enabled then
         startTripToPetSlotV2(prompt, slotNumber)
         return
@@ -1685,7 +1825,6 @@ local function startTripToPetSlot(prompt, slotNumber)
     local needJump = config.NeedJump == true
     if slotNumber >= 19 and slotNumber <= 27 then needJump = true end
     
-    -- ===== SAFE ZONE LOGIC =====
     local rootNow = Root and Root.Position
     if rootNow and isInFlashSafeZone(rootNow) then
         local positions = { FLASH_SAFE_POS }
@@ -1694,7 +1833,6 @@ local function startTripToPetSlot(prompt, slotNumber)
         end
         targetPositions = positions
     end
-    -- ============================
     
     if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
     if not Root or not Humanoid then return end
@@ -2098,7 +2236,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- FPS BOOSTER (VT) – ativado automaticamente
+-- FPS BOOSTER (VT)
 -- ==========================================
 local UltraBooster = {
     running = false,
@@ -2470,7 +2608,7 @@ local function BuildHUB()
     }
 
     -- ==========================================
-    -- SCREENGUI PRINCIPALE "67"
+    -- SCREENGUI PRINCIPALE "67" (USANDO SAFE_GUI)
     -- ==========================================
     local HIGH_HUB_GUI = Instance.new("ScreenGui")
     HIGH_HUB_GUI.Name = "67"
@@ -2478,7 +2616,7 @@ local function BuildHUB()
     HIGH_HUB_GUI.DisplayOrder = 999
     HIGH_HUB_GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     HIGH_HUB_GUI.IgnoreGuiInset = false
-    HIGH_HUB_GUI.Parent = gethui()
+    HIGH_HUB_GUI.Parent = SAFE_GUI
 
     -- ==========================================
     -- LOCK/UNLOCK GUI
@@ -2724,7 +2862,7 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- PANEL 1 : ACTIONS (Flash TP, Block, Reset)
+    -- PANEL 1 : ACTIONS
     -- ==========================================
     local FLASHTP, flashAccent, BLOCK, blockAccent, RESET, resetAccent
 
@@ -3027,7 +3165,7 @@ local function BuildHUB()
     end
 
     -- ==========================================
-    -- PANEL 3 : BRAINROTS (lista de pets)
+    -- PANEL 3 : BRAINROTS
     -- ==========================================
     local BW = isMob and 198 or 234
     local BH = isMob and 195 or 245
@@ -4234,6 +4372,8 @@ local function BuildHUB()
         AllowDisallowEnabled = function() return _G.AllowDisallowEnabled or true end,
         PlayerESP = function() return _G.PlayerESP or false end,
         TPV2Enabled = function() return _G.TPV2Enabled or false end,
+        AutoCarpetSpeed = function() return _G.AutoCarpetSpeed or false end,
+        AntiDie = function() return _G.AntiDie or false end,
     }
 
     -- ==========================================
@@ -4542,6 +4682,11 @@ local function BuildHUB()
         if allowPanel then allowPanel.Visible = v end
         saveSettings()
     end)
+    toggleRow(ScrollMisc, "Auto Carpet Speed", _G.AutoCarpetSpeed or false, function(v)
+        _G.AutoCarpetSpeed = v
+        if v then hhStartAutoCarpet() else hhStopAutoCarpet() end
+        saveSettings()
+    end)
 
     -- ==========================================
     -- TAB : VISUAL
@@ -4554,6 +4699,13 @@ local function BuildHUB()
     toggleRow(ScrollVisual, "Player ESP", _G.PlayerESP, function(v)
         _G.PlayerESP = v
         if not v then clearPlayerESP() end
+    end)
+
+    sectionHeader(ScrollVisual, "  PROTECTION  ")
+    toggleRow(ScrollVisual, "Anti Die", _G.AntiDie or false, function(v)
+        _G.AntiDie = v
+        if v then startAntiDie() else stopAntiDie() end
+        saveSettings()
     end)
 
     sectionHeader(ScrollVisual, "  BACKPACK ESP  ")
@@ -4922,6 +5074,8 @@ local function cleanup()
     clearAPESP()
     clearPlayerESP()
     UltraBooster.stop()
+    hhStopAutoCarpet()
+    stopAntiDie()
 end
 
 game:GetService("ScriptContext"):GetScriptsAddedSignal():Connect(function()
