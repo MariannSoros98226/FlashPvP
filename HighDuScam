@@ -1620,12 +1620,46 @@ _G.ShowFlyingCarpet = savedSettings.ShowFlyingCarpet or true
 _G.QuickPickup = savedSettings.QuickPickup or false
 QuickPickup.set(_G.QuickPickup)
 _G.AntiRagdoll = savedSettings.AntiRagdoll or false
-_G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled or true
+_G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled ~= nil and savedSettings.AllowDisallowEnabled or true
 _G.PlayerESP = savedSettings.PlayerESP or false
 _G.AutoCarpetSpeed = savedSettings.AutoCarpetSpeed or false
 _G.AntiDie = savedSettings.AntiDie or false
 _G.TPCloneEnabled = savedSettings.TPCloneEnabled or false
 _G.AutoGrab = savedSettings.AutoGrab or false
+_G.AutoBalloonEnabled = savedSettings.AutoBalloon or false
+
+-- AUTO BALLOON logic only (no additional GUI)
+local AutoBalloon = {enabled=false, active={}, cooldown={}, conn=nil}
+local zones={
+ {Vector3.new(-345.35,-6.55,39.19),5,"l"},{Vector3.new(-350.53,-6.55,38.67),20,"l"},{Vector3.new(-364.01,-6.55,38.94),20,"l"},{Vector3.new(-337.34,-6.55,39.18),20,"l"},
+ {Vector3.new(-365.29,-6.95,-10.40),20,"s"},{Vector3.new(-354.68,-6.95,6.22),20,"s"},{Vector3.new(-343.15,-6.53,-13.20),20,"s"},{Vector3.new(-344.93,-6.95,25.73),20,"s"},{Vector3.new(-343.76,-6.95,-10.27),20,"s"},{Vector3.new(-354.42,-6.95,6.51),20,"s"},{Vector3.new(-340.48,-5.32,28.10),20,"s"},{Vector3.new(-361.10,-6.95,29.42),20,"s"},{Vector3.new(-354.83,27.19,31.22),20,"l"}}
+local function inZone(pos)
+ for _,z in ipairs(zones) do local h=z[2]/2; local dx=math.abs(pos.X-z[1].X); local dz=math.abs(pos.Z-z[1].Z); if (z[3]=="l" and dx<=h and dz<=1.5) or (z[3]=="s" and dx<=h and dz<=h) then return true end end
+ return false
+end
+local function commandBox()
+ local g=PlayerGui:FindFirstChild("AdminPanel"); local p=g and g:FindFirstChild("AdminPanel"); local c=p and p:FindFirstChild("CommandBox"); return c and c:FindFirstChild("TextBox")
+end
+local function balloon(plr)
+ local box=commandBox(); if not box then return end; local vis=box.Visible; box.Visible=false; box.Text=";balloon "..plr.Name; task.wait(.05); local ok=false
+ if firesignal then ok=pcall(function() firesignal(box.FocusLost,true) end) end
+ if not ok and getconnections then pcall(function() for _,c in pairs(getconnections(box.FocusLost)) do c:Fire(true) end end) end
+ box.Text=""; box.Visible=vis
+end
+function AutoBalloon.set(on)
+ AutoBalloon.enabled=on and true or false; if not AutoBalloon.enabled then AutoBalloon.active={}; AutoBalloon.cooldown={} end
+ if AutoBalloon.conn then AutoBalloon.conn:Disconnect(); AutoBalloon.conn=nil end
+ if AutoBalloon.enabled then AutoBalloon.conn=RunService.Heartbeat:Connect(function()
+  local now=tick()
+  for _,plr in ipairs(Players:GetPlayers()) do
+   local ch=plr.Character; local root=ch and (ch:FindFirstChild("HumanoidRootPart") or ch:FindFirstChild("Torso")); local stealing=plr~=LocalPlayer and plr:GetAttribute("StealingPlayer")==true
+   if stealing and root and inZone(root.Position) and not AutoBalloon.active[plr.UserId] and now-(AutoBalloon.cooldown[plr.UserId] or 0)>=3 then AutoBalloon.active[plr.UserId]=true; AutoBalloon.cooldown[plr.UserId]=now; task.spawn(balloon,plr)
+   elseif not stealing then AutoBalloon.active[plr.UserId]=nil end
+  end
+ end) end
+end
+_G.AutoBalloon=AutoBalloon
+_G.FpsBooster = savedSettings.FpsBooster == nil and true or savedSettings.FpsBooster
 
 local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh", "Flying Bee" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
@@ -4527,6 +4561,7 @@ local function BuildHUB()
 
     local function updateLockState(locked)
         guiLocked = locked
+        _G.HighHubUILocked = locked
         lockBtn.Text = locked and "🔒" or "🔓"
         lockBtn.TextColor3 = locked and Color3.fromRGB(255, 200, 100) or C.textBright
         for _, child in ipairs(HIGH_HUB_GUI:GetChildren()) do
@@ -4852,7 +4887,7 @@ local function BuildHUB()
         b.LayoutOrder = 1
         b.Parent = allowBtnContainer
         Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-        local bs = Instance.new("UIStroke", b); bs.Color = C.strokeDim; bs.Thickness = 1; bs.Transparency = 0.35
+        local bs = Instance.new("UIStroke", b); bs.Color = C.stroke; bs.Thickness = 1; bs.Transparency = 0.2
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1, -4, 1, 0)
         lbl.BackgroundTransparency = 1
@@ -4868,11 +4903,21 @@ local function BuildHUB()
         local bar = Instance.new("Frame")
         bar.BackgroundTransparency = 1
         bar.Parent = b
+        local allowGrad = Instance.new("UIGradient", lbl)
+        allowGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.textBright),
+            ColorSequenceKeypoint.new(0.5, C.textMauve),
+            ColorSequenceKeypoint.new(1, C.textBright)
+        })
+        table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
+            if allowGrad and allowGrad.Parent then allowGrad.Rotation = (tick()*100)%360 end
+        end))
         allowBtn = b
         allowAccent = bar
     end
 
     local allowState = false
+    allowBtn.BackgroundColor3 = C.card
     local function toggleAllow()
         if not _G.AllowDisallowEnabled then return end
         allowState = not allowState
@@ -4881,6 +4926,9 @@ local function BuildHUB()
             lbl.Text = allowState and "ALLOW" or "DISALLOW"
             lbl.TextColor3 = C.textBright
         end
+        local bs = allowBtn:FindFirstChildOfClass("UIStroke")
+        if bs then bs.Color = C.stroke; bs.Transparency = 0.35 end
+        allowBtn.BackgroundColor3 = C.card
         if allowAccent then
             allowAccent.BackgroundColor3 = C.accentHi
             TweenService:Create(allowAccent, TweenInfo.new(0.4), { BackgroundColor3 = C.stroke }):Play()
@@ -5626,6 +5674,8 @@ local function BuildHUB()
         AntiDie = function() return _G.AntiDie or false end,
         TPCloneEnabled = function() return _G.TPCloneEnabled end,
         AutoGrab = function() return _G.AutoGrab or false end,
+        AutoBalloon = function() return _G.AutoBalloonEnabled == true end,
+        FpsBooster = function() return _G.FpsBooster == true end,
         CloneESP = function() return _G.CloneESP and _G.CloneESP.isEnabled() end,
         BrainrotESP = function() return _G.BrainrotESP and _G.BrainrotESP.isEnabled() end,
         AllowDisallowESP = function() return _G.AllowDisallowESP and _G.AllowDisallowESP.isEnabled() end,
@@ -5859,17 +5909,6 @@ local function BuildHUB()
 
     sectionHeader(ScrollMisc, "  MISC  ")
 
-    -- ==========================================
-    -- AUTO GRAB TOGGLE (integrado na MISC)
-    -- ==========================================
-    toggleRow(ScrollMisc, "Auto Grab", _G.AutoGrab or false, function(v)
-        _G.AutoGrab = v
-        if _G.HighAutoGrab and _G.HighAutoGrab.set then
-            _G.HighAutoGrab.set(v)
-        end
-        saveSettings()
-    end)
-
     toggleRow(ScrollMisc, "Anti Ragdoll", antiRagdollEnabled, function(v)
         antiRagdollEnabled = v
         if v then startAntiRagdoll() else stopAntiRagdoll() end
@@ -5877,6 +5916,7 @@ local function BuildHUB()
     toggleRow(ScrollMisc, "Quick Admin Panel", _G.QuickAP, function(v)
         _G.QuickAP = v
         if qapPanel then qapPanel.Visible = v end
+        saveSettings()
     end)
     toggleRow(ScrollMisc, "Quick Pickup", _G.QuickPickup, function(v)
         _G.QuickPickup = v
@@ -5887,6 +5927,16 @@ local function BuildHUB()
     toggleRow(ScrollMisc, "TP Clone", _G.TPCloneEnabled, function(v)
         _G.TPCloneEnabled = v
         if not v then tpcStop() end
+        saveSettings()
+    end)
+    toggleRow(ScrollMisc, "Auto Balloon", _G.AutoBalloonEnabled, function(v)
+        _G.AutoBalloonEnabled=v
+        if _G.AutoBalloon then _G.AutoBalloon.set(v) end
+        saveSettings()
+    end)
+    toggleRow(ScrollMisc, "Auto Grab", _G.AutoGrab or false, function(v)
+        _G.AutoGrab = v
+        if _G.HighAutoGrab and _G.HighAutoGrab.set then _G.HighAutoGrab.set(v) end
         saveSettings()
     end)
     dropdownRow(ScrollMisc, "Walk Item", WalkItemOptions, _G.WalkItem, function(choice) _G.WalkItem = choice end)
@@ -5930,13 +5980,15 @@ local function BuildHUB()
     end)
 
     sectionHeader(ScrollVisual, "  ESP  ")
-    toggleRow(ScrollVisual, "ESP Timer", _G.EspTimer, function(v)
-        _G.EspTimer = v
-        if not v then clearBaseESP() end
-    end)
-    toggleRow(ScrollVisual, "Player ESP", _G.PlayerESP, function(v)
+    toggleRow(ScrollVisual, "Esp Player", _G.PlayerESP, function(v)
         _G.PlayerESP = v
         if not v then clearPlayerESP() end
+        saveSettings()
+    end)
+    toggleRow(ScrollVisual, "Esp Time", _G.EspTimer, function(v)
+        _G.EspTimer = v
+        if not v then clearBaseESP() end
+        saveSettings()
     end)
     toggleRow(ScrollVisual, "Clone ESP", _G.CloneESP and _G.CloneESP.isEnabled(), function(v)
         if _G.CloneESP and _G.CloneESP.set then
@@ -5955,18 +6007,10 @@ local function BuildHUB()
     end)
 
     sectionHeader(ScrollVisual, "  VISUAL  ")
-    toggleRow(ScrollVisual, "Game Stretcher", _G.GameStretcher and _G.GameStretcher.isEnabled(), function(v)
-        if _G.GameStretcher and _G.GameStretcher.set then
-            _G.GameStretcher.set(v)
-        end
-    end)
-    toggleRow(ScrollVisual, "Camera FOV", _G.GameStretcher and _G.GameStretcher.isEnabled(), function(v)
-        -- A opção Camera FOV é gerenciada pelo Game Stretcher, o toggle aqui é redundante
-        -- mas pode ser usado para forçar o FOV se o Stretcher estiver desligado.
-        -- Por simplicidade, faremos com que este toggle ligue/desligue o Stretcher.
-        if _G.GameStretcher and _G.GameStretcher.set then
-            _G.GameStretcher.set(v)
-        end
+    toggleRow(ScrollVisual, "Fps Booster", _G.FpsBooster, function(v)
+        _G.FpsBooster = v
+        if v then UltraBooster.start() else UltraBooster.stop() end
+        saveSettings()
     end)
 
     sectionHeader(ScrollVisual, "  BACKPACK ESP  ")
@@ -6260,6 +6304,92 @@ end
 
 BuildHUB()
 
+
+-- ==========================================
+-- FPS + PING OVERLAY (drag / F8 hide-show)
+-- ==========================================
+do
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or PlayerGui
+    local old = pg and pg:FindFirstChild("HighBanner")
+    if old then old:Destroy() end
+    if pg then
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "HighBanner"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        gui.Parent = pg
+        local root = Instance.new("Frame")
+        root.Name = "Root"
+        root.Position = UDim2.fromOffset(18, 38)
+        root.Size = UDim2.fromOffset(292, 44)
+        root.BackgroundColor3 = Color3.fromRGB(22, 24, 28)
+        root.BackgroundTransparency = 0.08
+        root.BorderSizePixel = 0
+        root.Active = true
+        root.Parent = gui
+        Instance.new("UICorner", root).CornerRadius = UDim.new(0, 12)
+        local stroke = Instance.new("UIStroke", root)
+        stroke.Thickness = 1.5
+        stroke.Color = Color3.fromRGB(255, 120, 180)
+        local logo = Instance.new("TextLabel", root)
+        logo.BackgroundTransparency = 1
+        logo.Position = UDim2.fromOffset(12, 0)
+        logo.Size = UDim2.fromOffset(31, 44)
+        logo.Font = Enum.Font.GothamBold
+        logo.Text = "H"
+        logo.TextColor3 = Color3.fromRGB(255, 120, 180)
+        logo.TextSize = 26
+        local info = Instance.new("TextLabel", root)
+        info.BackgroundTransparency = 1
+        info.Position = UDim2.fromOffset(48, 0)
+        info.Size = UDim2.new(1, -58, 1, 0)
+        info.Font = Enum.Font.GothamSemibold
+        info.Text = "High  |   0 FPS  |  0 ms"
+        info.TextColor3 = Color3.fromRGB(235, 235, 240)
+        info.TextSize = 13
+        info.TextXAlignment = Enum.TextXAlignment.Left
+        local frames, elapsed, fps = 0, 0, 0
+        local renderConn = RunService.RenderStepped:Connect(function(dt)
+            frames += 1; elapsed += dt
+            if elapsed >= 0.5 then fps = math.clamp(math.floor(frames / elapsed + 0.5), 0, 999); frames = 0; elapsed = 0 end
+        end)
+        task.spawn(function()
+            while gui.Parent and not thisScriptStopped do
+                local ping = 0
+                pcall(function()
+                    local n = Stats:FindFirstChild("Network")
+                    local ss = n and n:FindFirstChild("ServerStatsItem")
+                    local dp = ss and ss:FindFirstChild("Data Ping")
+                    if dp then ping = tonumber(string.match(dp:GetValueString(), "%d+%.?%d*")) or 0 else ping = (LocalPlayer:GetNetworkPing() or 0) * 1000 end
+                end)
+                info.Text = string.format("High  |   %d FPS  |  %d ms", fps, math.max(0, math.floor(ping + 0.5)))
+                task.wait(0.5)
+            end
+        end)
+        local dragging, dragStart, startPos = false, nil, nil
+        root.InputBegan:Connect(function(input)
+            if _G.HighHubUILocked then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging, dragStart, startPos = true, input.Position, root.Position
+                input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if _G.HighHubUILocked or not dragging then return end
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local d = input.Position - dragStart
+            root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            uiLayout.FpsPingOverlay = {px=root.Position.X.Offset, py=root.Position.Y.Offset, pw=root.Size.X.Offset, ph=root.Size.Y.Offset}
+            saveUILayout()
+        end)
+        local saved = uiLayout.FpsPingOverlay
+        if saved then root.Position = UDim2.fromOffset(saved.px, saved.py) end
+        UserInputService.InputBegan:Connect(function(input, gp) if not gp and input.KeyCode == Enum.KeyCode.F8 then gui.Enabled = not gui.Enabled end end)
+        table.insert(ActiveConnections, function() pcall(function() renderConn:Disconnect() end); pcall(function() gui:Destroy() end) end)
+    end
+end
+
 -- ==========================================
 -- AUTO-ENABLE SAVED TOGGLES
 -- ==========================================
@@ -6268,17 +6398,14 @@ task.defer(function()
         if _G.AutoGrab and _G.HighAutoGrab and _G.HighAutoGrab.set then
             _G.HighAutoGrab.set(true)
         end
+        if _G.AutoBalloonEnabled and _G.AutoBalloon then _G.AutoBalloon.set(true) end
         if _G.QuickPickup and QuickPickup and QuickPickup.set then QuickPickup.set(true) end
         if _G.AutoCarpetSpeed then hhStartAutoCarpet() end
         if _G.AntiDie then startAntiDie() end
         if antiRagdollEnabled then startAntiRagdoll() end
+        if _G.FpsBooster then UltraBooster.start() end
     end)
 end)
-
--- ==========================================
--- ATIVA FPS BOOSTER
--- ==========================================
-UltraBooster.start()
 
 -- ==========================================
 -- CLEANUP
@@ -6290,6 +6417,7 @@ local function cleanup()
     end
     ActiveConnections = {}
     stopFlashLagger()
+    if _G.AutoBalloon then _G.AutoBalloon.set(false) end
     stopAutoResetTiny()
     stopAutoResetJail()
     clearBaseESP()
