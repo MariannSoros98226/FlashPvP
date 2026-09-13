@@ -425,9 +425,9 @@ end
 -- FLASH SPEED
 -- ==========================================
 _G.FlashSpeed = _G.FlashSpeed or 150
-_G.TPV2Speed = 450
+_G.TPV2Speed = 230
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
-local function getTPV2Speed() return _G.TPV2Speed or 450 end
+local function getTPV2Speed() return _G.TPV2Speed or 230 end
 
 -- ==========================================
 -- SAFE ZONE
