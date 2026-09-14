@@ -346,6 +346,40 @@ do
         end
         return false
     end
+    local function isRocketForce(obj)
+        return obj and (obj:IsA("BodyVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyThrust")
+            or obj:IsA("LinearVelocity") or obj:IsA("VectorForce") or obj:IsA("AlignPosition"))
+    end
+    local function hasFlightTool(char)
+        if not char then return false end
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") then
+                local n = string.lower(child.Name or "")
+                if n:find("carpet") or n:find("broom") or n:find("wing") or n:find("sleigh")
+                    or n:find("waverider") or n:find("hover") or n:find("jetpack") or n:find("cloud") then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    local function isRocketed(char)
+        if not char then return false end
+        local rocketAttrs = {"Rocket", "Rocketed", "IsRocket", "InRocket", "Rocketing"}
+        for _, inst in ipairs({LocalPlayer, char}) do
+            for _, attr in ipairs(rocketAttrs) do
+                if inst:GetAttribute(attr) == true then return true end
+            end
+        end
+        for _, d in ipairs(char:GetDescendants()) do
+            local n = string.lower(d.Name or "")
+            if n:find("rocket") then return true end
+        end
+        if hasFlightTool(char) then return false end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root and root.AssemblyLinearVelocity.Y > 70 then return true end
+        return false
+    end
     local function hook(char)
         if not char then return end
         table.insert(ActiveConnections, char.DescendantAdded:Connect(function(obj)
@@ -354,6 +388,7 @@ do
             if _G.AutoResetOnBalloon and n:find("balloon") then tryReset()
             elseif _G.AutoResetOnTiny and n:find("tiny") then tryReset()
             elseif _G.AutoResetOnJail and n:find("jail") then tryReset()
+            elseif _G.AutoResetOnRocket and (n:find("rocket") or isRocketForce(obj)) then tryReset()
             end
         end))
         local function watch(inst, attr, flag)
@@ -376,6 +411,10 @@ do
             watch(LocalPlayer, a, "AutoResetOnJail")
             watch(char, a, "AutoResetOnJail")
         end
+        for _, a in ipairs({"Rocket", "Rocketed", "IsRocket", "InRocket", "Rocketing"}) do
+            watch(LocalPlayer, a, "AutoResetOnRocket")
+            watch(char, a, "AutoResetOnRocket")
+        end
     end
     task.spawn(function()
         while not thisScriptStopped do
@@ -385,6 +424,7 @@ do
                 if _G.AutoResetOnBalloon and isBallooned(char) then tryReset()
                 elseif _G.AutoResetOnTiny and isTiny(char) then tryReset()
                 elseif _G.AutoResetOnJail and isJailed(char) then tryReset()
+                elseif _G.AutoResetOnRocket and isRocketed(char) then tryReset()
                 end
             end
         end
@@ -425,9 +465,7 @@ end
 -- FLASH SPEED
 -- ==========================================
 _G.FlashSpeed = _G.FlashSpeed or 150
-_G.TPV2Speed = 230
 local function getFlashSpeed() return _G.FlashSpeed or 150 end
-local function getTPV2Speed() return _G.TPV2Speed or 230 end
 
 -- ==========================================
 -- SAFE ZONE
@@ -1084,271 +1122,6 @@ local function stopAntiDie()
 end
 
 -- ==========================================
--- TP CLONE
--- ==========================================
-_G.TPCloneEnabled = _G.TPCloneEnabled or false
-local TPCloneState = {
-    Running = false, Phase = "idle", LastClone = 0,
-    OrigWS = nil, OrigJP = nil, AnimConn = nil,
-    Velocity = nil, Attachment = nil, MoveConn = nil, CloneConn = nil,
-}
-local TPCloneConfig = {
-    WalkPos = Vector3.new(-329.7665710449219, -3.3762288093566896, 30.646617889404298),
-    WalkSpeed = 150, SlowDist = 25, StopDist = 3,
-    CloneToolName = "Quantum Cloner", CarpetName = "Flying Carpet",
-    Cooldown = 1.5, CloneWait = 4,
-}
-local function tpcGetChar()
-    local c = LocalPlayer.Character
-    if not c then return nil, nil, nil end
-    return c, c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
-end
-local function tpcFindTool(nameList)
-    local c = LocalPlayer.Character
-    local bp = LocalPlayer:FindFirstChild("Backpack")
-    local function search(container)
-        if not container then return nil, false end
-        for _, t in ipairs(container:GetChildren()) do
-            if t:IsA("Tool") then
-                for _, n in ipairs(nameList) do
-                    if t.Name == n or t.Name:lower():find(n:lower(), 1, true) then
-                        return t, (container == c)
-                    end
-                end
-            end
-        end
-        return nil, false
-    end
-    local tool, equipped = search(c)
-    if tool then return tool, equipped end
-    return search(bp)
-end
-local function tpcStopAnim()
-    if TPCloneState.AnimConn then
-        pcall(function() TPCloneState.AnimConn:Disconnect() end)
-        TPCloneState.AnimConn = nil
-    end
-end
-local function tpcStartAnim(h)
-    tpcStopAnim()
-    local animator = h:FindFirstChildOfClass("Animator")
-    if not animator then return end
-    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-        local n = track.Animation and track.Animation.Name:lower() or ""
-        if n:find("walk") or n:find("run") or n:find("sprint") then
-            pcall(function() track:Stop(0) end)
-        end
-    end
-    TPCloneState.AnimConn = animator.AnimationPlayed:Connect(function(track)
-        local n = track.Animation and track.Animation.Name:lower() or ""
-        if n:find("walk") or n:find("run") or n:find("sprint") then
-            pcall(function() track:Stop(0) end)
-        end
-    end)
-end
-local function tpcCleanMovement()
-    if TPCloneState.MoveConn then
-        pcall(function() TPCloneState.MoveConn:Disconnect() end)
-        TPCloneState.MoveConn = nil
-    end
-    if TPCloneState.Velocity then
-        pcall(function() TPCloneState.Velocity:Destroy() end)
-        TPCloneState.Velocity = nil
-    end
-    if TPCloneState.Attachment then
-        pcall(function() TPCloneState.Attachment:Destroy() end)
-        TPCloneState.Attachment = nil
-    end
-    local _, r = tpcGetChar()
-    if r then
-        local oldV = r:FindFirstChild("TPClone_Vel")
-        if oldV then oldV:Destroy() end
-        local oldA = r:FindFirstChild("TPClone_Att")
-        if oldA then oldA:Destroy() end
-    end
-    tpcStopAnim()
-    local _, _, h = tpcGetChar()
-    if h and TPCloneState.OrigWS then
-        h.WalkSpeed = TPCloneState.OrigWS
-        h.JumpPower = TPCloneState.OrigJP
-    end
-end
-local function tpcWalkToTarget(onArrive)
-    tpcCleanMovement()
-    local c, r, h = tpcGetChar()
-    if not r or not h then return false end
-    TPCloneState.Phase = "walking"
-    TPCloneState.OrigWS = h.WalkSpeed
-    TPCloneState.OrigJP = h.JumpPower
-    h.WalkSpeed = 0
-    h.JumpPower = 0
-    tpcStartAnim(h)
-    local carpet = tpcFindTool({TPCloneConfig.CarpetName, "Carpet", "Flying", "Broom", "Wings"})
-    if carpet then
-        pcall(function() h:UnequipTools() end)
-        task.wait(0.05)
-        pcall(function() h:EquipTool(carpet) end)
-        task.wait(0.05)
-    end
-    local Attachment = Instance.new("Attachment")
-    Attachment.Name = "TPClone_Att"
-    Attachment.Parent = r
-    local Velocity = Instance.new("LinearVelocity")
-    Velocity.Name = "TPClone_Vel"
-    Velocity.Attachment0 = Attachment
-    Velocity.RelativeTo = Enum.ActuatorRelativeTo.World
-    Velocity.MaxForce = math.huge
-    Velocity.Parent = r
-    TPCloneState.Attachment = Attachment
-    TPCloneState.Velocity = Velocity
-    local target = TPCloneConfig.WalkPos
-    TPCloneState.MoveConn = RunService.Heartbeat:Connect(function()
-        if not TPCloneState.Running then
-            if TPCloneState.MoveConn then TPCloneState.MoveConn:Disconnect() end
-            return
-        end
-        local _, rr, hh = tpcGetChar()
-        if not rr or not hh or hh.Health <= 0 then
-            tpcCleanMovement()
-            return
-        end
-        local p = rr.Position
-        if p.Y < -100 then
-            rr.CFrame = CFrame.new(target + Vector3.new(0, 5, 0))
-            rr.AssemblyLinearVelocity = Vector3.zero
-            return
-        end
-        local d = Vector3.new(target.X - p.X, 0, target.Z - p.Z)
-        local di = d.Magnitude
-        if di <= TPCloneConfig.StopDist then
-            Velocity.VectorVelocity = Vector3.zero
-            rr.AssemblyLinearVelocity = Vector3.zero
-            tpcCleanMovement()
-            rr.CFrame = CFrame.new(target)
-            TPCloneState.Phase = "arrived"
-            if onArrive then task.spawn(onArrive) end
-            return
-        end
-        local speedMult = 1
-        if di < TPCloneConfig.SlowDist then
-            speedMult = math.max(0.2, di / TPCloneConfig.SlowDist)
-        end
-        Velocity.VectorVelocity = Vector3.new(
-            d.Unit.X * TPCloneConfig.WalkSpeed * speedMult,
-            0,
-            d.Unit.Z * TPCloneConfig.WalkSpeed * speedMult
-        )
-    end)
-    return true
-end
-local function tpcSpawnClone()
-    local c, r, h = tpcGetChar()
-    if not c or not h then return nil end
-    TPCloneState.Phase = "spawning"
-    pcall(function() h:UnequipTools() end)
-    task.wait(0.15)
-    local cloner, eq = tpcFindTool({TPCloneConfig.CloneToolName, "Quantum", "Cloner"})
-    if not cloner then return nil end
-    if not eq then
-        pcall(function() h:EquipTool(cloner) end)
-        task.wait(0.2)
-    end
-    if cloner.Parent ~= c then return nil end
-    local activated = false
-    if cloner.Activate then
-        pcall(function() cloner:Activate() end)
-        activated = true
-    end
-    if not activated and firesignal then
-        pcall(function() firesignal(cloner.Activated) end)
-    end
-    local cloneName = tostring(LocalPlayer.UserId) .. "_Clone"
-    local startTime = tick()
-    local clone = nil
-    while tick() - startTime < TPCloneConfig.CloneWait do
-        clone = Workspace:FindFirstChild(cloneName)
-        if clone then break end
-        task.wait(0.1)
-    end
-    if not clone then return nil end
-    TPCloneState.Phase = "clone_spawned"
-    return clone
-end
-local function tpcTeleportToClone(clone)
-    if not clone then return false end
-    local clicked = false
-    local tf = PlayerGui:FindFirstChild("ToolsFrames")
-    if tf then
-        local qf = tf:FindFirstChild("QuantumCloner")
-        if qf then
-            local tb = qf:FindFirstChild("TeleportToClone")
-            if tb then
-                if not tb.Visible then tb.Visible = true end
-                if firesignal then
-                    pcall(function()
-                        firesignal(tb.MouseButton1Click)
-                        firesignal(tb.MouseButton1Down)
-                        firesignal(tb.MouseButton1Up)
-                        clicked = true
-                    end)
-                end
-                if not clicked and tb.Activate then
-                    pcall(function()
-                        tb:Activate()
-                        clicked = true
-                    end)
-                end
-            end
-        end
-    end
-    if not clicked then
-        local remotes = ReplicatedStorage:FindFirstChild("Packages")
-        if remotes then
-            local net = remotes:FindFirstChild("Net")
-            if net then
-                for _, r in ipairs(net:GetChildren()) do
-                    if r:IsA("RemoteEvent") and r.Name:lower():find("teleport") then
-                        pcall(function() r:FireServer() end)
-                        clicked = true
-                        break
-                    end
-                end
-            end
-        end
-    end
-    return clicked
-end
-local function tpcRun()
-    if not _G.TPCloneEnabled then return end
-    if TPCloneState.Running then return end
-    if tick() - TPCloneState.LastClone < TPCloneConfig.Cooldown then return end
-    TPCloneState.LastClone = tick()
-    TPCloneState.Running = true
-    TPCloneState.Phase = "starting"
-    task.spawn(function()
-        tpcWalkToTarget(function()
-            task.wait(0.2)
-            if not TPCloneState.Running then return end
-            local clone = tpcSpawnClone()
-            if not clone then
-                TPCloneState.Phase = "failed"
-                TPCloneState.Running = false
-                return
-            end
-            task.wait(0.3)
-            tpcTeleportToClone(clone)
-            TPCloneState.Phase = "done"
-            task.wait(1)
-            TPCloneState.Running = false
-        end)
-    end)
-end
-local function tpcStop()
-    TPCloneState.Running = false
-    TPCloneState.Phase = "idle"
-    tpcCleanMovement()
-end
-
 -- ==========================================
 -- SETTINGS
 -- ==========================================
@@ -1360,6 +1133,13 @@ local function loadSettings()
     return {}
 end
 local settingsGetters = {}
+
+local function savedBool(data, key, defaultValue)
+    if type(data) == "table" and data[key] ~= nil then
+        return data[key] == true
+    end
+    return defaultValue == true
+end
 
 -- ==========================================
 -- AIMBOT
@@ -1592,41 +1372,46 @@ local function registerPanelLayout(panel, name, defaultMinW, defaultMinH)
 end
 
 local savedSettings = loadSettings()
-_G.AutoResetOnBalloon = savedSettings.AutoResetOnBalloon or false
-_G.AutoFlashTP = savedSettings.AutoFlashTP or false
-_G.AutoGiant = savedSettings.AutoGiant or false
-_G.RagdollBypass = savedSettings.RagdollBypass or false
-_G.AutoBlock = savedSettings.AutoBlock or false
+_G.AutoResetOnRocket = savedBool(savedSettings, "AutoResetOnRocket", false)
+_G.AutoResetOnBalloon = savedBool(savedSettings, "AutoResetOnBalloon", false)
+_G.AutoFlashTP = savedBool(savedSettings, "AutoFlashTP", false)
+_G.AutoGiant = savedBool(savedSettings, "AutoGiant", false)
+_G.RagdollBypass = savedBool(savedSettings, "RagdollBypass", false)
+_G.AutoBlock = savedBool(savedSettings, "AutoBlock", false)
 _G.BlockMode = savedSettings.BlockMode or "normal"
-_G.LaggerOnFlash = savedSettings.LaggerOnFlash or false
+_G.LaggerOnFlash = savedBool(savedSettings, "LaggerOnFlash", false)
 _G.LaggerPower = savedSettings.LaggerPower or 50
 _G.FlashSpeed = savedSettings.FlashSpeed or 150
-_G.TPV2Enabled = savedSettings.TPV2Enabled or false
-_G.AimbotEnabled = savedSettings.Aimbot or false
-_G.AutoResetTiny = savedSettings.AutoResetTiny or false
+_G.AimbotEnabled = savedBool(savedSettings, "Aimbot", false)
+_G.AutoResetTiny = savedBool(savedSettings, "AutoResetTiny", false)
 TinyState.Enabled = _G.AutoResetTiny
 if TinyState.Enabled then startAutoResetTiny() end
-_G.AutoResetJail = savedSettings.AutoResetJail or false
+_G.AutoResetJail = savedBool(savedSettings, "AutoResetJail", false)
 JailState.Enabled = _G.AutoResetJail
 if JailState.Enabled then startAutoResetJail() end
-_G.APESP = savedSettings.APESP or false
-_G.EspTimer = savedSettings.EspTimer or false
-_G.QuickAP = savedSettings.QuickAP or false
-_G.BackpackESP = savedSettings.BackpackESP or false
-_G.ShowAPESP = savedSettings.ShowAPESP or true
-_G.ShowGiantPotion = savedSettings.ShowGiantPotion or true
-_G.ShowFlashTeleport = savedSettings.ShowFlashTeleport or true
-_G.ShowFlyingCarpet = savedSettings.ShowFlyingCarpet or true
-_G.QuickPickup = savedSettings.QuickPickup or false
+_G.APESP = savedBool(savedSettings, "APESP", false)
+_G.EspTimer = savedBool(savedSettings, "EspTimer", false)
+_G.QuickAP = savedBool(savedSettings, "QuickAP", false)
+_G.BackpackESP = savedBool(savedSettings, "BackpackESP", false)
+_G.ShowAPESP = savedBool(savedSettings, "ShowAPESP", true)
+_G.ShowGiantPotion = savedBool(savedSettings, "ShowGiantPotion", true)
+_G.ShowFlashTeleport = savedBool(savedSettings, "ShowFlashTeleport", true)
+_G.ShowFlyingCarpet = savedBool(savedSettings, "ShowFlyingCarpet", true)
+_G.QuickPickup = savedBool(savedSettings, "QuickPickup", false)
 QuickPickup.set(_G.QuickPickup)
-_G.AntiRagdoll = savedSettings.AntiRagdoll or false
-_G.AllowDisallowEnabled = savedSettings.AllowDisallowEnabled ~= nil and savedSettings.AllowDisallowEnabled or true
-_G.PlayerESP = savedSettings.PlayerESP or false
-_G.AutoCarpetSpeed = savedSettings.AutoCarpetSpeed or false
-_G.AntiDie = savedSettings.AntiDie or false
-_G.TPCloneEnabled = savedSettings.TPCloneEnabled or false
-_G.AutoGrab = savedSettings.AutoGrab or false
-_G.AutoBalloonEnabled = savedSettings.AutoBalloon or false
+_G.AntiRagdoll = savedBool(savedSettings, "AntiRagdoll", false)
+_G.AllowDisallowEnabled = savedBool(savedSettings, "AllowDisallowEnabled", true)
+_G.PlayerESP = savedBool(savedSettings, "PlayerESP", false)
+_G.AutoCarpetSpeed = savedBool(savedSettings, "AutoCarpetSpeed", false)
+_G.AntiDie = savedBool(savedSettings, "AntiDie", false)
+_G.AutoGrab = savedBool(savedSettings, "AutoGrab", false)
+_G.AutoBalloonEnabled = savedBool(savedSettings, "AutoBalloon", false)
+_G.CloneESPEnabled = savedBool(savedSettings, "CloneESP", false)
+_G.AllowDisallowESPEnabled = savedBool(savedSettings, "AllowDisallowESP", false)
+_G.InfiniteJumpEnabled = savedBool(savedSettings, "InfiniteJump", false)
+_G.AutoTurretEnabled = savedBool(savedSettings, "AutoTurret", false)
+_G.GummyBypassEnabled = savedBool(savedSettings, "GummyBypass", false)
+_G.AntiAdminEnabled = savedBool(savedSettings, "AntiAdmin", false)
 
 -- AUTO BALLOON logic only (no additional GUI)
 local AutoBalloon = {enabled=false, active={}, cooldown={}, conn=nil}
@@ -1963,361 +1748,6 @@ end)()
 
 table.insert(ActiveConnections, function()
     if _G.CloneESP and _G.CloneESP.set then _G.CloneESP.set(false) end
-end)
-
--- ==========================================
--- BRAINROT ESP (From High Hub)
--- ==========================================
-_G.BrainrotESP = (function()
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local LP = Players.LocalPlayer
-
-    local M = { enabled = false }
-    local espFolder = nil
-    local entries = {}
-    local conn = nil
-    local acc = 0
-
-    local function isValidStealPrompt(prompt)
-        if not prompt or not prompt.Parent or not prompt.Enabled then return false end
-        local state = prompt:GetAttribute("State")
-        local actionText = prompt.ActionText
-        if state == "Steal" or state == "Grab" or actionText == "Steal" or actionText == "Grab" then
-            return true
-        end
-        return false
-    end
-
-    local function isOwnPlot(plot)
-        if not plot then return false end
-        local sign = plot:FindFirstChild("PlotSign")
-        if sign then
-            local yb = sign:FindFirstChild("YourBase")
-            if yb and yb:IsA("BillboardGui") and yb.Enabled then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function ensureFolder()
-        if espFolder and espFolder.Parent then return espFolder end
-        local pg = LP:FindFirstChild("PlayerGui") or LP:WaitForChild("PlayerGui", 5)
-        if not pg then return nil end
-        local f = pg:FindFirstChild("HighBrainrotESP")
-        if not f then
-            f = Instance.new("Folder")
-            f.Name = "HighBrainrotESP"
-            f.Parent = pg
-        end
-        espFolder = f
-        return f
-    end
-
-    local function clearAll()
-        for key, e in pairs(entries) do
-            pcall(function() if e.bb then e.bb:Destroy() end end)
-            pcall(function() if e.hl then e.hl:Destroy() end end)
-        end
-        entries = {}
-        if espFolder then
-            for _, ch in ipairs(espFolder:GetChildren()) do
-                pcall(function() ch:Destroy() end)
-            end
-        end
-    end
-
-    local function collectMoneyText(spawn)
-        if not spawn then return "" end
-        local function isMoney(t)
-            if type(t) ~= "string" or t == "" then return false end
-            return t:find("%$") ~= nil or t:find("/s") ~= nil
-                or t:find("M/s") ~= nil or t:find("K/s") ~= nil
-                or t:find("B/s") ~= nil or t:find("T/s") ~= nil
-        end
-        local function fromGui(gui)
-            for _, label in ipairs(gui:GetDescendants()) do
-                if label:IsA("TextLabel") and isMoney(label.Text) then
-                    return (label.Text or ""):gsub("%s+", "")
-                end
-            end
-            return ""
-        end
-        for _, attName in ipairs({"PromptAttachment", "Attachment"}) do
-            local att = spawn:FindFirstChild(attName)
-            if att then
-                for _, child in ipairs(att:GetDescendants()) do
-                    if child:IsA("BillboardGui") or child.Name == "AnimalOverhead" then
-                        local m = fromGui(child)
-                        if m ~= "" then
-                            if not m:find("%$") then m = "$" .. m end
-                            if not m:find("/s") then m = m .. "/s" end
-                            return m
-                        end
-                    end
-                end
-            end
-        end
-        for _, child in ipairs(spawn:GetChildren()) do
-            if child:IsA("BillboardGui") then
-                local m = fromGui(child)
-                if m ~= "" then
-                    if not m:find("%$") then m = "$" .. m end
-                    if not m:find("/s") then m = m .. "/s" end
-                    return m
-                end
-            end
-        end
-        return ""
-    end
-
-    local function findNearModel(plot, spawn, pod)
-        if not plot or not spawn then return nil end
-        local playerNames = {}
-        for _, p in ipairs(Players:GetPlayers()) do playerNames[p.Name] = true end
-        local best, bestD = nil, 14
-        for _, v in ipairs(plot:GetDescendants()) do
-            if v:IsA("Model") and not playerNames[v.Name] then
-                if pod and v:IsDescendantOf(pod) then continue end
-                local n = string.lower(v.Name or "")
-                if n == "base" or n == "spawn" or n:find("podium") or n:find("plot") then continue end
-                local rp = v.PrimaryPart or v:FindFirstChild("HumanoidRootPart")
-                    or v:FindFirstChild("RootPart") or v:FindFirstChildWhichIsA("BasePart")
-                if rp then
-                    local d = (rp.Position - spawn.Position).Magnitude
-                    if d < bestD then bestD = d; best = v end
-                end
-            end
-        end
-        return best
-    end
-
-    local function getMutationHint(prompt, spawn, model)
-        local function tryAttr(inst)
-            if not inst then return nil end
-            for _, a in ipairs({"Mutation", "mutation", "Variant", "variant", "Rarity", "rarity", "Skin", "skin"}) do
-                local ok, v = pcall(function() return inst:GetAttribute(a) end)
-                if ok and v ~= nil then
-                    local s = tostring(v)
-                    if s ~= "" and s ~= "None" and s ~= "nil" and s ~= "Default" then
-                        return s
-                    end
-                end
-            end
-            return nil
-        end
-        local mut = tryAttr(prompt) or tryAttr(spawn) or tryAttr(model)
-        if not mut and model then
-            for _, d in ipairs(model:GetDescendants()) do
-                if d:IsA("TextLabel") and d.Text and #d.Text > 0 and #d.Text < 36 then
-                    local t = d.Text
-                    local low = string.lower(t)
-                    for _, k in ipairs({"gold","diamond","blood","candy","lava","galaxy","rainbow","cursed","neon","crystal","phantom","cyber","divine","radioactive","yin"}) do
-                        if low:find(k, 1, true) then
-                            return t
-                        end
-                    end
-                end
-                mut = mut or tryAttr(d)
-                if mut then break end
-            end
-        end
-        return mut
-    end
-
-    local function makeEntry(key, spawn, petName, money, mut, model)
-        local folder = ensureFolder()
-        if not folder then return end
-        local col = Color3.fromRGB(255, 80, 180)
-
-        local bb = Instance.new("BillboardGui")
-        bb.Name = "BR_ESP_" .. key:gsub("%W", "_")
-        bb.Size = UDim2.new(0, 160, 0, 48)
-        bb.StudsOffset = Vector3.new(0, 3.2, 0)
-        bb.AlwaysOnTop = true
-        bb.MaxDistance = 450
-        bb.Adornee = spawn
-        bb.Parent = folder
-
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.Name = "Name"
-        nameLbl.Size = UDim2.new(1, 0, 0, 26)
-        nameLbl.Position = UDim2.new(0, 0, 0, 0)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Font = Enum.Font.GothamBold
-        nameLbl.TextSize = 13
-        nameLbl.TextColor3 = col
-        nameLbl.TextStrokeTransparency = 0.25
-        nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        nameLbl.TextScaled = false
-        nameLbl.TextWrapped = true
-        nameLbl.TextYAlignment = Enum.TextYAlignment.Bottom
-        local display = petName
-        if mut and mut ~= "" and not string.lower(petName):find(string.lower(mut), 1, true) then
-            display = petName .. " [" .. mut .. "]"
-        end
-        nameLbl.Text = display
-        nameLbl.Parent = bb
-
-        local moneyLbl = Instance.new("TextLabel")
-        moneyLbl.Name = "Money"
-        moneyLbl.Size = UDim2.new(1, 0, 0, 18)
-        moneyLbl.Position = UDim2.new(0, 0, 0, 26)
-        moneyLbl.BackgroundTransparency = 1
-        moneyLbl.Font = Enum.Font.GothamBold
-        moneyLbl.TextSize = 12
-        moneyLbl.TextColor3 = Color3.fromRGB(120, 255, 160)
-        moneyLbl.TextStrokeTransparency = 0.3
-        moneyLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        moneyLbl.Text = money ~= "" and money or ""
-        moneyLbl.Parent = bb
-
-        local hl = nil
-        if model then
-            hl = Instance.new("Highlight")
-            hl.Name = "ESP_Kay_BRAINROT"
-            hl.Adornee = model
-            hl.FillColor = col
-            hl.OutlineColor = Color3.new(col.R * 0.5, col.G * 0.5, col.B * 0.5)
-            hl.FillTransparency = 0.65
-            hl.OutlineTransparency = 0.15
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Parent = model
-        end
-
-        entries[key] = {
-            bb = bb,
-            hl = hl,
-            nameLbl = nameLbl,
-            moneyLbl = moneyLbl,
-            spawn = spawn,
-            model = model,
-        }
-    end
-
-    local function updateESP()
-        if not M.enabled then return end
-        local plots = workspace:FindFirstChild("Plots")
-        if not plots then return end
-        local seen = {}
-        local playerNames = {}
-        for _, p in ipairs(Players:GetPlayers()) do playerNames[p.Name] = true end
-
-        for _, plot in ipairs(plots:GetChildren()) do
-            if not plot:IsA("Model") then continue end
-            if isOwnPlot(plot) then continue end
-            local pods = plot:FindFirstChild("AnimalPodiums")
-            if not pods then continue end
-            for _, pod in ipairs(pods:GetChildren()) do
-                local slot = tonumber(tostring(pod.Name):match("%d+")) or 0
-                local base = pod:FindFirstChild("Base") or pod
-                local sp = base and base:FindFirstChild("Spawn")
-                if not sp then continue end
-
-                local prompt = nil
-                local att = sp:FindFirstChild("PromptAttachment")
-                if att then
-                    for _, pr in ipairs(att:GetChildren()) do
-                        if pr:IsA("ProximityPrompt") and isValidStealPrompt(pr) then
-                            prompt = pr
-                            break
-                        end
-                    end
-                end
-                if not prompt then
-                    for _, pr in ipairs(sp:GetDescendants()) do
-                        if pr:IsA("ProximityPrompt") and isValidStealPrompt(pr) then
-                            prompt = pr
-                            break
-                        end
-                    end
-                end
-                if not prompt then continue end
-
-                local petName = tostring(prompt.ObjectText or ""):gsub("^%s+", ""):gsub("%s+$", "")
-                local model = findNearModel(plot, sp, pod)
-                if (petName == "" or petName == "Pet") and model then
-                    petName = model.Name
-                end
-                if not petName or petName == "" or petName == "Pet" then continue end
-
-                local mut = getMutationHint(prompt, sp, model)
-                local money = collectMoneyText(sp)
-                local key = plot.Name .. "|" .. tostring(slot) .. "|" .. petName
-                seen[key] = true
-
-                local existing = entries[key]
-                if existing and existing.bb and existing.bb.Parent then
-                    local display = petName
-                    if mut and mut ~= "" and not string.lower(petName):find(string.lower(mut), 1, true) then
-                        display = petName .. " [" .. mut .. "]"
-                    end
-                    if existing.nameLbl then existing.nameLbl.Text = display end
-                    if existing.moneyLbl then existing.moneyLbl.Text = money end
-                    if existing.bb.Adornee ~= sp then existing.bb.Adornee = sp end
-                else
-                    if existing then
-                        pcall(function() if existing.bb then existing.bb:Destroy() end end)
-                        pcall(function() if existing.hl then existing.hl:Destroy() end end)
-                        entries[key] = nil
-                    end
-                    makeEntry(key, sp, petName, money, mut, model)
-                end
-            end
-        end
-
-        for key, e in pairs(entries) do
-            if not seen[key] then
-                pcall(function() if e.bb then e.bb:Destroy() end end)
-                pcall(function() if e.hl then e.hl:Destroy() end end)
-                entries[key] = nil
-            end
-        end
-    end
-
-    local function start()
-        if conn then return end
-        ensureFolder()
-        acc = 0
-        conn = RunService.Heartbeat:Connect(function(dt)
-            if not M.enabled then return end
-            acc = acc + (dt or 0.016)
-            if acc < 0.35 then return end
-            acc = 0
-            pcall(updateESP)
-        end)
-        pcall(updateESP)
-    end
-
-    local function stop()
-        if conn then
-            pcall(function() conn:Disconnect() end)
-            conn = nil
-        end
-        clearAll()
-    end
-
-    function M.set(on)
-        on = on and true or false
-        if on == M.enabled then return end
-        M.enabled = on
-        if on then
-            start()
-        else
-            stop()
-        end
-    end
-
-    function M.isEnabled()
-        return M.enabled
-    end
-
-    return M
-end)()
-
-table.insert(ActiveConnections, function()
-    if _G.BrainrotESP and _G.BrainrotESP.set then _G.BrainrotESP.set(false) end
 end)
 
 -- ==========================================
@@ -3652,179 +3082,9 @@ local PREBLOCK_DIST_BY_SLOT = {
 }
 
 -- ==========================================
--- TP V2 (Grappe)
--- ==========================================
-local function startTripToPetSlotV2(prompt, slotNumber)
-    local config = SlotsConfig[slotNumber] or SlotsConfig[1]
-    local targetPositions = config.Positions
-    local needJump = config.NeedJump == true
-    if slotNumber >= 19 and slotNumber <= 27 then needJump = true end
-    local rootNow = Root and Root.Position
-    if rootNow and isInFlashSafeZone(rootNow) then
-        local positions = { FLASH_SAFE_POS }
-        for _, p in ipairs(targetPositions) do table.insert(positions, p) end
-        targetPositions = positions
-    end
-    if currentMovement then pcall(function() currentMovement:Disconnect() end) currentMovement = nil end
-    if not Root or not Humanoid then return end
-    autoStealEnabled = true
-    startFlashLagger()
-    local Speed = getTPV2Speed()
-    local grabStartDistance = 70
-    local grabStarted = false
-    local grappe = findTool("Grappe") or findTool("Grappling Hook") or findTool("Grapple")
-    if grappe then 
-        Humanoid:UnequipTools() 
-        task.wait(0.02)
-        Humanoid:EquipTool(grappe) 
-    end
-    local carpet = findTool(_G.WalkItem or "Flying Carpet")
-    stopWalkAnimations()
-    if Root:FindFirstChild("LinearVelocity") then Root.LinearVelocity:Destroy() end
-    if Root:FindFirstChild("Attachment") then Root.Attachment:Destroy() end
-    local Attachment = Instance.new("Attachment")
-    Attachment.Parent = Root
-    local Velocity = Instance.new("LinearVelocity")
-    Velocity.Attachment0 = Attachment
-    Velocity.RelativeTo = Enum.ActuatorRelativeTo.World
-    Velocity.MaxForce = math.huge
-    Velocity.Parent = Root
-    local currentPosIndex = 1
-    local intermediatePauseActive = false
-    local savedWalkSpeed = Humanoid.WalkSpeed
-    local savedJumpPower = Humanoid.JumpPower
-    Humanoid.WalkSpeed = 0
-    Humanoid.JumpPower = 0
-    local animator = Humanoid:FindFirstChildOfClass("Animator")
-    local animConn
-    if animator then
-        animConn = animator.AnimationPlayed:Connect(function(track)
-            local animName = track.Animation and track.Animation.Name:lower() or ""
-            if animName:find("walk") or animName:find("run") or animName:find("sprint") then
-                pcall(function() track:Stop(0) end)
-            end
-        end)
-    end
-    currentMovement = RunService.Heartbeat:Connect(function()
-        if thisScriptStopped then
-            if currentMovement then pcall(function() currentMovement:Disconnect() end) currentMovement = nil end
-            Humanoid.WalkSpeed = savedWalkSpeed Humanoid.JumpPower = savedJumpPower
-            if animConn then pcall(function() animConn:Disconnect() end) end
-            return
-        end
-        if not Root or not Humanoid or not Root.Parent or Humanoid.Health <= 0 then
-            if currentMovement then pcall(function() currentMovement:Disconnect() end) currentMovement = nil end
-            Humanoid.WalkSpeed = savedWalkSpeed Humanoid.JumpPower = savedJumpPower
-            if animConn then pcall(function() animConn:Disconnect() end) end
-            return
-        end
-        if intermediatePauseActive then Velocity.VectorVelocity = Vector3.zero return end
-        local TargetPosition = targetPositions[currentPosIndex]
-        if not TargetPosition then return end
-        local rootPos = Root.Position
-        local dir = Vector3.new(TargetPosition.X - rootPos.X, 0, TargetPosition.Z - rootPos.Z)
-        local dist = dir.Magnitude
-        if dist <= grabStartDistance and not grabStarted then
-            grabStarted = true
-            if carpet then
-                Humanoid:UnequipTools()
-                task.wait(0.03)
-                Humanoid:EquipTool(carpet)
-            end
-            task.spawn(function() executeSteal(prompt) end)
-        end
-        local speedMult = 1
-        if dist < SLOW_DIST then speedMult = math.max(0.15, dist / SLOW_DIST) end
-        if dist <= STOP_DIST then
-            if currentPosIndex < #targetPositions then
-                intermediatePauseActive = true
-                Velocity.VectorVelocity = Vector3.zero
-                Root.AssemblyLinearVelocity = Vector3.zero
-                task.spawn(function()
-                    currentPosIndex = currentPosIndex + 1
-                    intermediatePauseActive = false
-                end)
-                return
-            end
-            Velocity.VectorVelocity = Vector3.zero
-            Root.AssemblyLinearVelocity = Vector3.zero
-            Velocity:Destroy()
-            Attachment:Destroy()
-            Root.CFrame = CFrame.new(TargetPosition)
-            if currentMovement then pcall(function() currentMovement:Disconnect() end) currentMovement = nil end
-            task.wait(0.08)
-            Camera.CameraType = Enum.CameraType.Scriptable
-            Camera.CFrame = CFrame.new(Root.Position + config.CamOffset) * CFrame.Angles(unpack(config.CamAngles))
-            Humanoid:UnequipTools()
-            task.wait(0.04)
-            if needJump then
-                Root.AssemblyLinearVelocity = Vector3.new(0, 55, 0)
-                task.wait(0.06)
-            end
-            local flash = findTool("flash")
-            if flash then
-                Humanoid:EquipTool(flash)
-                task.wait(0.05)
-                flash:Activate()
-            end
-            task.wait(0.06)
-            if _G.RagdollBypass then
-                local giant = findTool("giant potion")
-                if giant then
-                    Humanoid:EquipTool(giant)
-                    task.wait(0.05)
-                    giant:Activate()
-                    task.wait(0.02)
-                    Humanoid:UnequipTools()
-                end
-                task.spawn(function()
-                    local TextBox = _qapTextBox
-                    if TextBox then
-                        local fullCmd = ";ragdoll " .. LocalPlayer.Name
-                        TextBox.Visible = false
-                        TextBox.Text = fullCmd
-                        task.wait(0.04)
-                        pcall(function()
-                            for _, conn in pairs(getconnections(TextBox.FocusLost)) do
-                                conn:Fire(true)
-                            end
-                        end)
-                        task.wait(0.04)
-                        TextBox.Text = ""
-                        TextBox.Visible = true
-                    end
-                end)
-            end
-            Camera.CameraType = Enum.CameraType.Custom
-            if _G.AutoBlock then
-                local mode = _G.BlockMode or "normal"
-                task.spawn(function()
-                    if mode == "normal" then task.wait(0.10)
-                    elseif mode == "fast" then task.wait(0.06)
-                    else task.wait(0.06) end
-                    local target = getNearestPlayer()
-                    if target then blockPlayer(target) end
-                end)
-            end
-            Humanoid.WalkSpeed = savedWalkSpeed
-            Humanoid.JumpPower = savedJumpPower
-            if animConn then pcall(function() animConn:Disconnect() end) end
-            task.spawn(function() task.wait(0.8) autoStealEnabled = false end)
-            return
-        end
-        Velocity.VectorVelocity = Vector3.new(dir.Unit.X * Speed * speedMult, 0, dir.Unit.Z * Speed * speedMult)
-    end)
-    table.insert(ActiveConnections, currentMovement)
-end
-
--- ==========================================
 -- START TRIP (Original)
 -- ==========================================
 local function startTripToPetSlot(prompt, slotNumber)
-    if _G.TPV2Enabled then
-        startTripToPetSlotV2(prompt, slotNumber)
-        return
-    end
     local config = SlotsConfig[slotNumber] or SlotsConfig[1]
     local targetPositions = config.Positions
     local needJump = config.NeedJump == true
@@ -4479,11 +3739,11 @@ end)
 -- BUILD HUB
 -- ==========================================
 local function BuildHUB()
-    local old = PlayerGui:FindFirstChild("Nexyra SCRIPT")
+    local old = PlayerGui:FindFirstChild("HIGH")
     if old then old:Destroy() end
-    local oldB = PlayerGui:FindFirstChild("NOXHUB BANNER")
+    local oldB = PlayerGui:FindFirstChild("HIGH")
     if oldB then oldB:Destroy() end
-    local oldN = PlayerGui:FindFirstChild("NOX SCRIPT")
+    local oldN = PlayerGui:FindFirstChild("HIGH")
     if oldN then oldN:Destroy() end
     local oldReset = PlayerGui:FindFirstChild("ResetUI")
     if oldReset then oldReset:Destroy() end
@@ -4739,13 +3999,13 @@ local function BuildHUB()
     end
 
     -- PANEL ACTIONS
-    local FLASHTP, flashAccent, BLOCK, blockAccent, RESET, resetAccent, TPCLONE, tpcloneAccent
+    local FLASHTP, flashAccent, BLOCK, blockAccent, RESET, resetAccent
     do
         local AW = isMob and 400 or 380
         local ACT_BTN_W = isMob and 80 or 85
         local ACT_BTN_H = isMob and 32 or 36
         local ACT_PADDING = 6
-        local ACT_COUNT = 4
+        local ACT_COUNT = 3
         local AH_HORIZONTAL = HEADER_H + 12 + ACT_BTN_H + 8
         local AH_VERTICAL = HEADER_H + 12 + (ACT_BTN_H + ACT_PADDING) * ACT_COUNT + 8
 
@@ -4843,7 +4103,6 @@ local function BuildHUB()
         FLASHTP, flashAccent = mkActionBtn("67", "FLASH TP", 1)
         BLOCK, blockAccent = mkActionBtn("67", "BLOCK", 2)
         RESET, resetAccent = mkActionBtn("67", "RESET", 3)
-        TPCLONE, tpcloneAccent = mkActionBtn("67", "TP CLONE", 4)
     end
 
     -- PANEL ALLOW/DISALLOW
@@ -4948,20 +4207,6 @@ local function BuildHUB()
         end
     end
     allowBtn.MouseButton1Click:Connect(toggleAllow)
-
-    local allowKeybind = Enum.KeyCode.A
-    pcall(function()
-        local kbData = HttpService:JSONDecode(readfile("high_keybinds.json"))
-        if kbData and kbData.allow then
-            local ok, kc = pcall(function() return Enum.KeyCode[kbData.allow] end)
-            if ok and kc then allowKeybind = kc end
-        end
-    end)
-    table.insert(ActiveConnections, UserInputService.InputBegan:Connect(function(inp, gpe)
-        if gpe then return end
-        if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-        if inp.KeyCode == allowKeybind then toggleAllow() end
-    end))
 
     -- PANEL BRAINROTS
     local BW = isMob and 198 or 234
@@ -5122,9 +4367,10 @@ local function BuildHUB()
     makeTab("block", "BLOCK", 3)
     makeTab("misc", "MISC", 4)
     makeTab("visual", "VISUAL", 5)
+    makeTab("keybinds", "KEYBIRDS", 6)
 
-    local ScrollReset, ScrollFlash, ScrollBlock, ScrollMisc, ScrollVisual =
-        tabFrames.reset, tabFrames.flash, tabFrames.block, tabFrames.misc, tabFrames.visual
+    local ScrollReset, ScrollFlash, ScrollBlock, ScrollMisc, ScrollVisual, ScrollKeybinds =
+        tabFrames.reset, tabFrames.flash, tabFrames.block, tabFrames.misc, tabFrames.visual, tabFrames.keybinds
     selectTab("reset")
 
     local sectionOrder = 0
@@ -5241,7 +4487,7 @@ local function BuildHUB()
             ref.on = not ref.on
             render(true)
             if onToggle then pcall(onToggle, ref.on) end
-            saveSettings()
+            pcall(saveSettings)
         end)
         table.insert(toggleRefs, ref)
         return row, ref
@@ -5650,7 +4896,7 @@ local function BuildHUB()
         AutoGiant = function() return _G.AutoGiant end,
         AutoBlock = function() return _G.AutoBlock end,
         BlockMode = function() return _G.BlockMode end,
-        AntiRagdoll = function() return antiRagdollEnabled end,
+        AntiRagdoll = function() return _G.AntiRagdoll == true end,
         AutoResetTiny = function() return _G.AutoResetTiny end,
         AutoResetJail = function() return _G.AutoResetJail end,
         APESP = function() return _G.APESP end,
@@ -5667,43 +4913,49 @@ local function BuildHUB()
         LaggerOnFlash = function() return _G.LaggerOnFlash or false end,
         LaggerPower = function() return _G.LaggerPower or 50 end,
         FlashSpeed = function() return _G.FlashSpeed or 150 end,
-        AllowDisallowEnabled = function() return _G.AllowDisallowEnabled or true end,
+        AutoResetOnRocket = function() return _G.AutoResetOnRocket == true end,
+        AllowDisallowEnabled = function() return _G.AllowDisallowEnabled == true end,
         PlayerESP = function() return _G.PlayerESP or false end,
-        TPV2Enabled = function() return _G.TPV2Enabled or false end,
         AutoCarpetSpeed = function() return _G.AutoCarpetSpeed or false end,
         AntiDie = function() return _G.AntiDie or false end,
-        TPCloneEnabled = function() return _G.TPCloneEnabled end,
         AutoGrab = function() return _G.AutoGrab or false end,
         AutoBalloon = function() return _G.AutoBalloonEnabled == true end,
         FpsBooster = function() return _G.FpsBooster == true end,
-        CloneESP = function() return _G.CloneESP and _G.CloneESP.isEnabled() end,
-        BrainrotESP = function() return _G.BrainrotESP and _G.BrainrotESP.isEnabled() end,
-        AllowDisallowESP = function() return _G.AllowDisallowESP and _G.AllowDisallowESP.isEnabled() end,
+        CloneESP = function() return _G.CloneESPEnabled == true end,
+        AllowDisallowESP = function() return _G.AllowDisallowESPEnabled == true end,
         GameStretcher = function() return _G.GameStretcher and _G.GameStretcher.isEnabled() end,
-        InfiniteJump = function() return _G.InfiniteJump and _G.InfiniteJump.isEnabled() end,
-        AutoTurret = function() return _G.AutoTurret and _G.AutoTurret.isOn() end,
-        GummyBypass = function() return _G.GummyBypass and _G.GummyBypass.isEnabled() end,
-        AntiAdmin = function() return _G.AntiAdmin and _G.AntiAdmin.isEnabled() end,
+        InfiniteJump = function() return _G.InfiniteJumpEnabled == true end,
+        AutoTurret = function() return _G.AutoTurretEnabled == true end,
+        GummyBypass = function() return _G.GummyBypassEnabled == true end,
+        AntiAdmin = function() return _G.AntiAdminEnabled == true end,
     }
 
     sectionHeader(ScrollReset, "  AUTO RESET  ")
-    toggleRow(ScrollReset, "Reset On Balloon", _G.AutoResetOnBalloon, function(v) _G.AutoResetOnBalloon = v end)
+    toggleRow(ScrollReset, "Reset on Rocket", _G.AutoResetOnRocket, function(v)
+        _G.AutoResetOnRocket = v
+        saveSettings()
+    end)
+    toggleRow(ScrollReset, "Reset on Balloon", _G.AutoResetOnBalloon, function(v)
+        _G.AutoResetOnBalloon = v
+        saveSettings()
+    end)
     toggleRow(ScrollReset, "Reset On Tiny", _G.AutoResetTiny, function(v)
         _G.AutoResetTiny = v
         TinyState.Enabled = v
         if v then startAutoResetTiny() else stopAutoResetTiny() end
+        saveSettings()
     end)
     toggleRow(ScrollReset, "Reset On Jail", _G.AutoResetJail, function(v)
         _G.AutoResetJail = v
         JailState.Enabled = v
         if v then startAutoResetJail() else stopAutoResetJail() end
+        saveSettings()
     end)
 
     sectionHeader(ScrollFlash, "  FLASH TP  ")
     toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v) _G.AutoFlashTP = v end)
     toggleRow(ScrollFlash, "Auto Giant", _G.AutoGiant, function(v) _G.AutoGiant = v end)
     toggleRow(ScrollFlash, "Ragdoll Bypass", _G.RagdollBypass, function(v) _G.RagdollBypass = v end)
-    toggleRow(ScrollFlash, "TP V2 (Grappe)", _G.TPV2Enabled, function(v) _G.TPV2Enabled = v saveSettings() end)
     toggleRow(ScrollFlash, "Lagger on Flash TP", _G.LaggerOnFlash, function(v)
         _G.LaggerOnFlash = v
         if not v then stopFlashLagger() end
@@ -5909,8 +5161,8 @@ local function BuildHUB()
 
     sectionHeader(ScrollMisc, "  MISC  ")
 
-    toggleRow(ScrollMisc, "Anti Ragdoll", antiRagdollEnabled, function(v)
-        antiRagdollEnabled = v
+    toggleRow(ScrollMisc, "Anti Ragdoll", _G.AntiRagdoll, function(v)
+        _G.AntiRagdoll = v
         if v then startAntiRagdoll() else stopAntiRagdoll() end
     end)
     toggleRow(ScrollMisc, "Quick Admin Panel", _G.QuickAP, function(v)
@@ -5922,11 +5174,6 @@ local function BuildHUB()
         _G.QuickPickup = v
         QuickPickup.set(v)
         if not v then QuickPickup.set(false) end
-        saveSettings()
-    end)
-    toggleRow(ScrollMisc, "TP Clone", _G.TPCloneEnabled, function(v)
-        _G.TPCloneEnabled = v
-        if not v then tpcStop() end
         saveSettings()
     end)
     toggleRow(ScrollMisc, "Auto Balloon", _G.AutoBalloonEnabled, function(v)
@@ -5958,25 +5205,33 @@ local function BuildHUB()
         if v then startAntiDie() else stopAntiDie() end
         saveSettings()
     end)
-    toggleRow(ScrollMisc, "Infinite Jump", _G.InfiniteJump and _G.InfiniteJump.isEnabled(), function(v)
+    toggleRow(ScrollMisc, "Infinite Jump", _G.InfiniteJumpEnabled, function(v)
+        _G.InfiniteJumpEnabled = v
         if _G.InfiniteJump and _G.InfiniteJump.set then
             _G.InfiniteJump.set(v)
         end
+        saveSettings()
     end)
-    toggleRow(ScrollMisc, "Anti Turret", _G.AutoTurret and _G.AutoTurret.isOn(), function(v)
+    toggleRow(ScrollMisc, "Anti Turret", _G.AutoTurretEnabled, function(v)
+        _G.AutoTurretEnabled = v
         if _G.AutoTurret and _G.AutoTurret.set then
             _G.AutoTurret.set(v)
         end
+        saveSettings()
     end)
-    toggleRow(ScrollMisc, "Anti Gummy", _G.GummyBypass and _G.GummyBypass.isEnabled(), function(v)
+    toggleRow(ScrollMisc, "Anti Gummy", _G.GummyBypassEnabled, function(v)
+        _G.GummyBypassEnabled = v
         if _G.GummyBypass and _G.GummyBypass.set then
             _G.GummyBypass.set(v)
         end
+        saveSettings()
     end)
-    toggleRow(ScrollMisc, "Anti AP", _G.AntiAdmin and _G.AntiAdmin.isEnabled(), function(v)
+    toggleRow(ScrollMisc, "Anti AP", _G.AntiAdminEnabled, function(v)
+        _G.AntiAdminEnabled = v
         if _G.AntiAdmin and _G.AntiAdmin.set then
             _G.AntiAdmin.set(v)
         end
+        saveSettings()
     end)
 
     sectionHeader(ScrollVisual, "  ESP  ")
@@ -5990,20 +5245,19 @@ local function BuildHUB()
         if not v then clearBaseESP() end
         saveSettings()
     end)
-    toggleRow(ScrollVisual, "Clone ESP", _G.CloneESP and _G.CloneESP.isEnabled(), function(v)
+    toggleRow(ScrollVisual, "Clone ESP", _G.CloneESPEnabled, function(v)
+        _G.CloneESPEnabled = v
         if _G.CloneESP and _G.CloneESP.set then
             _G.CloneESP.set(v)
         end
+        saveSettings()
     end)
-    toggleRow(ScrollVisual, "Brainrot ESP", _G.BrainrotESP and _G.BrainrotESP.isEnabled(), function(v)
-        if _G.BrainrotESP and _G.BrainrotESP.set then
-            _G.BrainrotESP.set(v)
-        end
-    end)
-    toggleRow(ScrollVisual, "Allow/Disallow ESP", _G.AllowDisallowESP and _G.AllowDisallowESP.isEnabled(), function(v)
+    toggleRow(ScrollVisual, "Allow/Disallow ESP", _G.AllowDisallowESPEnabled, function(v)
+        _G.AllowDisallowESPEnabled = v
         if _G.AllowDisallowESP and _G.AllowDisallowESP.set then
             _G.AllowDisallowESP.set(v)
         end
+        saveSettings()
     end)
 
     sectionHeader(ScrollVisual, "  VISUAL  ")
@@ -6133,7 +5387,6 @@ local function BuildHUB()
     hookButton(FLASHTP)
     hookButton(BLOCK)
     hookButton(RESET)
-    hookButton(TPCLONE)
 
     local function flashBar(bar)
         bar.BackgroundColor3 = C.accentHi
@@ -6156,10 +5409,6 @@ local function BuildHUB()
     RESET.MouseButton1Click:Connect(function()
         flashBar(resetAccent)
         ResetPlayer()
-    end)
-    TPCLONE.MouseButton1Click:Connect(function()
-        flashBar(tpcloneAccent)
-        tpcRun()
     end)
 
     task.spawn(function()
@@ -6185,9 +5434,12 @@ local function BuildHUB()
         flash = Enum.KeyCode.F,
         block = Enum.KeyCode.B,
         reset = Enum.KeyCode.R,
+        allow = Enum.KeyCode.A,
     }
     local listeningAction = nil
     local justBound = false
+    local keybindDisplayButtons = {}
+    local beginKeybindCapture
     table.insert(ActiveConnections, UserInputService.InputBegan:Connect(function(inp, gpe)
         if gpe then return end
         if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -6202,10 +5454,12 @@ local function BuildHUB()
             if target then blockPlayer(target) end
         elseif inp.KeyCode == keybinds.reset then
             ResetPlayer()
+        elseif inp.KeyCode == keybinds.allow then
+            toggleAllow()
         end
     end))
 
-    local keyNames = { flash = "F", block = "B", reset = "R" }
+    local keyNames = { flash = "F", block = "B", reset = "R", allow = "A" }
     local KB_FILE = "high_keybinds.json"
     local function saveKeybinds()
         pcall(function()
@@ -6213,6 +5467,7 @@ local function BuildHUB()
                 flash = keyNames.flash,
                 block = keyNames.block,
                 reset = keyNames.reset,
+                allow = keyNames.allow,
             }))
         end)
     end
@@ -6221,7 +5476,7 @@ local function BuildHUB()
             return HttpService:JSONDecode(readfile(KB_FILE))
         end)
         if ok and type(data) == "table" then
-            for _, action in ipairs({"flash", "block", "reset"}) do
+            for _, action in ipairs({"flash", "block", "reset", "allow"}) do
                 if data[action] then
                     local ok2, kc = pcall(function() return Enum.KeyCode[data[action]] end)
                     if ok2 and kc then
@@ -6234,34 +5489,103 @@ local function BuildHUB()
     end
     loadKeybinds()
 
+    sectionHeader(ScrollKeybinds, "  KEYBIRDS  ")
+    local keybindRows = {
+        { action = "flash", title = "Flash TP" },
+        { action = "block", title = "Block" },
+        { action = "reset", title = "Reset" },
+        { action = "allow", title = "Allow/Disallow" },
+    }
+    for _, item in ipairs(keybindRows) do
+        sectionOrder += 1
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(0.92, 0, 0, 34)
+        row.AnchorPoint = Vector2.new(0.5, 0)
+        row.Position = UDim2.new(0.5, 0, 0, 0)
+        row.BackgroundColor3 = C.card
+        row.BackgroundTransparency = 0.6
+        row.BorderSizePixel = 0
+        row.LayoutOrder = sectionOrder
+        row.Parent = ScrollKeybinds
+        Instance.new("UICorner", row).CornerRadius = UDim.new(1, 0)
+        local rowStroke = Instance.new("UIStroke", row)
+        rowStroke.Color = C.strokeDim
+        rowStroke.Thickness = 1
+        rowStroke.Transparency = 0.35
+
+        local nameLabel = Instance.new("TextLabel", row)
+        nameLabel.Size = UDim2.new(1, -96, 1, 0)
+        nameLabel.Position = UDim2.new(0, 10, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = item.title
+        nameLabel.TextColor3 = C.textBright
+        nameLabel.TextSize = 12
+        nameLabel.Font = Enum.Font.GothamMedium
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local keyButton = Instance.new("TextButton", row)
+        keyButton.Size = UDim2.new(0, 76, 0, 24)
+        keyButton.Position = UDim2.new(1, -84, 0.5, -12)
+        keyButton.BackgroundColor3 = C.iconBg
+        keyButton.BorderSizePixel = 0
+        keyButton.Text = keyNames[item.action] or keybinds[item.action].Name
+        keyButton.TextColor3 = C.textBright
+        keyButton.TextSize = 11
+        keyButton.Font = Enum.Font.GothamBold
+        keyButton.AutoButtonColor = false
+        keyButton.ZIndex = 6
+        Instance.new("UICorner", keyButton).CornerRadius = UDim.new(0, 6)
+        local keyStroke = Instance.new("UIStroke", keyButton)
+        keyStroke.Color = C.accent
+        keyStroke.Transparency = 0.25
+        keybindDisplayButtons[item.action] = keyButton
+        keyButton.MouseButton1Click:Connect(function()
+            beginKeybindCapture(item.action, keyButton, keyNames[item.action])
+        end)
+    end
+
+    beginKeybindCapture = function(actionName, displayButton, idleText)
+        if listeningAction then return end
+        listeningAction = actionName
+        local originalText = idleText
+        if displayButton then
+            displayButton.Text = "Aperte uma tecla..."
+            displayButton.TextSize = 10
+            displayButton.TextColor3 = C.accent
+        end
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(inp2, gpe)
+            if gpe or inp2.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if inp2.KeyCode == Enum.KeyCode.Unknown then return end
+            conn:Disconnect()
+            justBound = true
+            listeningAction = nil
+            task.defer(function() justBound = false end)
+            keybinds[actionName] = inp2.KeyCode
+            keyNames[actionName] = inp2.KeyCode.Name
+            saveKeybinds()
+            if displayButton then
+                displayButton.Text = actionName == "flash" and "FLASH TP"
+                    or actionName == "block" and "BLOCK"
+                    or actionName == "reset" and "RESET"
+                    or actionName == "allow" and keyNames.allow
+                    or originalText
+                displayButton.TextSize = actionName == "allow" and 11 or (isMob and 9 or 11)
+                displayButton.TextColor3 = C.textBright
+            end
+            local pageButton = keybindDisplayButtons[actionName]
+            if pageButton and pageButton.Parent then
+                pageButton.Text = keyNames[actionName]
+                pageButton.TextColor3 = C.textBright
+            end
+        end)
+    end
+
     local function attachKeybindRightClick(btn, actionName, labelPrefix)
         btn.InputBegan:Connect(function(inp)
-            if inp.UserInputType ~= Enum.UserInputType.MouseButton2 then return end
-            if listeningAction then return end
-            listeningAction = actionName
-            local lbl = btn:FindFirstChildOfClass("TextLabel")
-            if lbl then
-                lbl.Text = "Aperte uma tecla..."
-                lbl.TextSize = 10
-                lbl.TextColor3 = C.accent
+            if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+                beginKeybindCapture(actionName, btn:FindFirstChildOfClass("TextLabel"), labelPrefix)
             end
-            local conn
-            conn = UserInputService.InputBegan:Connect(function(inp2, gpe)
-                if gpe then return end
-                if inp2.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                conn:Disconnect()
-                justBound = true
-                listeningAction = nil
-                task.defer(function() justBound = false end)
-                keybinds[actionName] = inp2.KeyCode
-                keyNames[actionName] = inp2.KeyCode.Name
-                saveKeybinds()
-                if lbl then
-                    lbl.Text = labelPrefix
-                    lbl.TextSize = isMob and 9 or 11
-                    lbl.TextColor3 = C.textBright
-                end
-            end)
         end)
     end
     attachKeybindRightClick(FLASHTP, "flash", "FLASH TP")
@@ -6292,7 +5616,6 @@ local function BuildHUB()
         applyTitleStyle(FLASHTP)
         applyTitleStyle(BLOCK)
         applyTitleStyle(RESET)
-        applyTitleStyle(TPCLONE)
         table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
             local rot = (tick()*100)%360
             for _, g in ipairs(actionGradients) do
@@ -6402,7 +5725,13 @@ task.defer(function()
         if _G.QuickPickup and QuickPickup and QuickPickup.set then QuickPickup.set(true) end
         if _G.AutoCarpetSpeed then hhStartAutoCarpet() end
         if _G.AntiDie then startAntiDie() end
-        if antiRagdollEnabled then startAntiRagdoll() end
+        if _G.AntiRagdoll then startAntiRagdoll() end
+        if _G.CloneESPEnabled and _G.CloneESP and _G.CloneESP.set then _G.CloneESP.set(true) end
+        if _G.AllowDisallowESPEnabled and _G.AllowDisallowESP and _G.AllowDisallowESP.set then _G.AllowDisallowESP.set(true) end
+        if _G.InfiniteJumpEnabled and _G.InfiniteJump and _G.InfiniteJump.set then _G.InfiniteJump.set(true) end
+        if _G.AutoTurretEnabled and _G.AutoTurret and _G.AutoTurret.set then _G.AutoTurret.set(true) end
+        if _G.GummyBypassEnabled and _G.GummyBypass and _G.GummyBypass.set then _G.GummyBypass.set(true) end
+        if _G.AntiAdminEnabled and _G.AntiAdmin and _G.AntiAdmin.set then _G.AntiAdmin.set(true) end
         if _G.FpsBooster then UltraBooster.start() end
     end)
 end)
@@ -6427,12 +5756,10 @@ local function cleanup()
     UltraBooster.stop()
     hhStopAutoCarpet()
     stopAntiDie()
-    tpcStop()
     if _G.HighAutoGrab and _G.HighAutoGrab.set then
         pcall(function() _G.HighAutoGrab.set(false) end)
     end
     if _G.CloneESP and _G.CloneESP.set then _G.CloneESP.set(false) end
-    if _G.BrainrotESP and _G.BrainrotESP.set then _G.BrainrotESP.set(false) end
     if _G.AllowDisallowESP and _G.AllowDisallowESP.set then _G.AllowDisallowESP.set(false) end
     if _G.GameStretcher and _G.GameStretcher.set then _G.GameStretcher.set(false) end
     if _G.InfiniteJump and _G.InfiniteJump.set then _G.InfiniteJump.set(false) end
