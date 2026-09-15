@@ -91,6 +91,55 @@ end
 
 local SAFE_GUI = getSafeGui()
 
+-- ==========================================
+-- HIDE NAMES / NORMALIZE GUI NAMES
+-- ==========================================
+local function hideNames()
+    local toHide = {
+        "PornHub", "LkzHub", "HighHub", "WhaleHub", "FadedHub",
+        "FadedHubESP", "AutoStealGui", "KaiAutoFarmGUI", "XiNotif",
+        "AutoStealCurrentTargetHUD", "AutoStealTargetControls", "XiPriorityAlert",
+        "XiMobileControls", "SettingsUI", "XiAdminPanel", "XiJobJoiner",
+        "XiInvisPanel", "ErrorOrbGui", "LagbackNotification", "DexPopup",
+        "DatShawnSpam", "DatShawnSpamPanel", "DexLogger", "GreenDuelsV2",
+        "ZLHubSelector", "ZLFirstPersonTag", "NineHubUI",
+        "SakuraAutoBatDesyncGUI", "EnvyAutoBatDesyncGUI",
+        "MwvaneNewaBatDesyncGUI", "PhazeAutoBatDesyncGUI",
+        "K7_Ultimate_Bypass", "BloomTP", "CleanDuels_UI", "KillHubGui",
+        "IntroGUI", "AnimPackGUI", "IftarSemiTP_ProgressBar", "IftarSemiTP",
+        "PistachioHubGui", "RadioactiveHubGui", "PhantomSemiTP_Halfway",
+        "CatHUB_Halfway", "StealBarGui", "AutoStealBar",
+        "StealProgressWindow", "HighAutoGrabProgress", "GreenHUBIntro",
+        "GreenDuelsLineESP", "AllowFriendsGui", "DiscordLabelGui",
+        "NoxHubColorPicker", "NoxGui", "PanelGui_Actions",
+        "PanelGui_Admin Panel", "PanelGui_Booster",
+        "PanelGui_Command Cooldowns", "PanelGui_Instant Steal V2",
+        "PanelGui_Nox Admin Spammer", "PanelGui_Nox Defense", "UI_Watermark",
+        "UnlockBaseGui", "G12BatTP", "AutoStealUI", "G12s Anti Bat",
+        "IrishHubGui", "IrishAutoGrab", "ControlEfectoGUI", "PhiAutotyper",
+        "HollowInvisible", "V3StealProgressBar", "SABHub", "DaniHub",
+        "AntiSammyHub",
+    }
+
+    local root = getSafeGui()
+    if not root then return end
+    for _, name in ipairs(toHide) do
+        local gui = root:FindFirstChild(name)
+        if gui then
+            pcall(function()
+                gui.Name = "67"
+                gui.Parent = root
+            end)
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        pcall(hideNames)
+    end
+end)
+
 pcall(function()
     if type(setfpscap) == "function" then setfpscap(9999) end
 end)
@@ -153,6 +202,58 @@ end
 
 _G.HugoForceUnlock = forceUnlockEverything
 
+local function _resetIsAnyBase(plot)
+    if not plot or not plot:IsA("Model") then return false end
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    local ok, cf, size = pcall(function() return plot:GetBoundingBox() end)
+    if not ok or not cf or not size then return false end
+    local pos = cf:PointToObjectSpace(root.Position)
+    return math.abs(pos.X) <= size.X / 2 + 5 and math.abs(pos.Z) <= size.Z / 2 + 5
+end
+
+local function _forceResetCarpetInsideBase()
+    local plots = Workspace:FindFirstChild("Plots")
+    local inside = false
+    if plots then
+        for _, plot in ipairs(plots:GetChildren()) do
+            if _resetIsAnyBase(plot) then inside = true break end
+        end
+    end
+    if not inside then return false end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not char or not hum then return false end
+
+    local carpet
+    local function match(tool)
+        if not tool or not tool:IsA("Tool") then return false end
+        local n = tool.Name:lower():gsub("%s+", " ")
+        return n:find("flying carpet", 1, true) ~= nil
+            or n:find("carpet flying", 1, true) ~= nil
+            or n:find("magic carpet", 1, true) ~= nil
+    end
+    for _, tool in ipairs(char:GetChildren()) do
+        if match(tool) then carpet = tool break end
+    end
+    if not carpet and backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if match(tool) then carpet = tool break end
+        end
+    end
+    if not carpet then return false end
+
+    pcall(function()
+        if carpet.Parent ~= char then hum:EquipTool(carpet) end
+    end)
+    local deadline = tick() + 0.25
+    while carpet.Parent ~= char and tick() < deadline do task.wait() end
+    return carpet.Parent == char
+end
+
 local function ResetPlayer()
     if resetCooldown then return end
     resetCooldown = true
@@ -161,6 +262,9 @@ local function ResetPlayer()
 
     local character = LocalPlayer.Character
     if not character then resetCooldown = false return end
+
+    -- Dentro da própria base, equipa o tapete antes do reset para evitar o bug de física.
+    pcall(_forceResetCarpetInsideBase)
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then resetCooldown = false return end
 
@@ -346,40 +450,6 @@ do
         end
         return false
     end
-    local function isRocketForce(obj)
-        return obj and (obj:IsA("BodyVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyThrust")
-            or obj:IsA("LinearVelocity") or obj:IsA("VectorForce") or obj:IsA("AlignPosition"))
-    end
-    local function hasFlightTool(char)
-        if not char then return false end
-        for _, child in ipairs(char:GetChildren()) do
-            if child:IsA("Tool") then
-                local n = string.lower(child.Name or "")
-                if n:find("carpet") or n:find("broom") or n:find("wing") or n:find("sleigh")
-                    or n:find("waverider") or n:find("hover") or n:find("jetpack") or n:find("cloud") then
-                    return true
-                end
-            end
-        end
-        return false
-    end
-    local function isRocketed(char)
-        if not char then return false end
-        local rocketAttrs = {"Rocket", "Rocketed", "IsRocket", "InRocket", "Rocketing"}
-        for _, inst in ipairs({LocalPlayer, char}) do
-            for _, attr in ipairs(rocketAttrs) do
-                if inst:GetAttribute(attr) == true then return true end
-            end
-        end
-        for _, d in ipairs(char:GetDescendants()) do
-            local n = string.lower(d.Name or "")
-            if n:find("rocket") then return true end
-        end
-        if hasFlightTool(char) then return false end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root and root.AssemblyLinearVelocity.Y > 70 then return true end
-        return false
-    end
     local function hook(char)
         if not char then return end
         table.insert(ActiveConnections, char.DescendantAdded:Connect(function(obj)
@@ -388,7 +458,6 @@ do
             if _G.AutoResetOnBalloon and n:find("balloon") then tryReset()
             elseif _G.AutoResetOnTiny and n:find("tiny") then tryReset()
             elseif _G.AutoResetOnJail and n:find("jail") then tryReset()
-            elseif _G.AutoResetOnRocket and (n:find("rocket") or isRocketForce(obj)) then tryReset()
             end
         end))
         local function watch(inst, attr, flag)
@@ -411,10 +480,6 @@ do
             watch(LocalPlayer, a, "AutoResetOnJail")
             watch(char, a, "AutoResetOnJail")
         end
-        for _, a in ipairs({"Rocket", "Rocketed", "IsRocket", "InRocket", "Rocketing"}) do
-            watch(LocalPlayer, a, "AutoResetOnRocket")
-            watch(char, a, "AutoResetOnRocket")
-        end
     end
     task.spawn(function()
         while not thisScriptStopped do
@@ -424,7 +489,6 @@ do
                 if _G.AutoResetOnBalloon and isBallooned(char) then tryReset()
                 elseif _G.AutoResetOnTiny and isTiny(char) then tryReset()
                 elseif _G.AutoResetOnJail and isJailed(char) then tryReset()
-                elseif _G.AutoResetOnRocket and isRocketed(char) then tryReset()
                 end
             end
         end
@@ -533,7 +597,6 @@ _G.HighAutoGrab = (function()
     local isStealing = false
     local stealStartTime = nil
     local autoConn = nil
-    local progFrame, progFill, progPct, progTitle
 
     local function isMyPlot(plot)
         if not plot then return false end
@@ -704,114 +767,12 @@ _G.HighAutoGrab = (function()
             local prompt = findNearestPrompt()
             if prompt then executeSteal(prompt) end
         end)
-        if progFrame then progFrame.Visible = true end
     end
 
     local function stopAutoGrab()
         if autoConn then pcall(function() autoConn:Disconnect() end) autoConn = nil end
         isStealing = false
         stealStartTime = nil
-        if progFrame then progFrame.Visible = false end
-    end
-
-    local function buildProgressBar(parent)
-        local colors = {
-            accent = Color3.fromRGB(255, 120, 180),
-            bg     = Color3.fromRGB(22, 24, 28),
-            track  = Color3.fromRGB(44, 46, 52),
-            text   = Color3.fromRGB(235, 235, 240),
-        }
-        progFrame = Instance.new("Frame")
-        progFrame.Name = "HighAutoGrabProgress"
-        progFrame.Size = UDim2.new(0, 220, 0, 46)
-        progFrame.Position = UDim2.new(0.5, -110, 0.78, 0)
-        progFrame.BackgroundColor3 = colors.bg
-        progFrame.BackgroundTransparency = 0.1
-        progFrame.BorderSizePixel = 0
-        progFrame.Visible = false
-        progFrame.ZIndex = 50
-        progFrame.Parent = parent
-        Instance.new("UICorner", progFrame).CornerRadius = UDim.new(0, 10)
-        local stroke = Instance.new("UIStroke", progFrame)
-        stroke.Color = colors.accent
-        stroke.Thickness = 1.4
-        stroke.Transparency = 0.2
-
-        progTitle = Instance.new("TextLabel", progFrame)
-        progTitle.Size = UDim2.new(1, -80, 0, 14)
-        progTitle.Position = UDim2.new(0, 12, 0, 6)
-        progTitle.BackgroundTransparency = 1
-        progTitle.Text = "AUTO GRAB"
-        progTitle.TextColor3 = colors.text
-        progTitle.Font = Enum.Font.GothamBold
-        progTitle.TextSize = 11
-        progTitle.TextXAlignment = Enum.TextXAlignment.Left
-        progTitle.ZIndex = 51
-
-        progPct = Instance.new("TextLabel", progFrame)
-        progPct.Size = UDim2.new(0, 60, 0, 14)
-        progPct.Position = UDim2.new(1, -72, 0, 6)
-        progPct.BackgroundTransparency = 1
-        progPct.Text = "0%"
-        progPct.TextColor3 = colors.accent
-        progPct.Font = Enum.Font.GothamBold
-        progPct.TextSize = 11
-        progPct.TextXAlignment = Enum.TextXAlignment.Right
-        progPct.ZIndex = 51
-
-        local track = Instance.new("Frame", progFrame)
-        track.Size = UDim2.new(1, -24, 0, 8)
-        track.Position = UDim2.new(0, 12, 1, -16)
-        track.BackgroundColor3 = colors.track
-        track.BorderSizePixel = 0
-        track.ClipsDescendants = true
-        track.ZIndex = 51
-        Instance.new("UICorner", track).CornerRadius = UDim.new(0, 4)
-
-        local midLine = Instance.new("Frame", track)
-        midLine.Size = UDim2.new(0, 2, 1, 0)
-        midLine.Position = UDim2.new(0.5, -1, 0, 0)
-        midLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        midLine.BackgroundTransparency = 0.15
-        midLine.BorderSizePixel = 0
-        midLine.ZIndex = 53
-
-        progFill = Instance.new("Frame", track)
-        progFill.Size = UDim2.new(0, 0, 1, 0)
-        progFill.BackgroundColor3 = colors.accent
-        progFill.BorderSizePixel = 0
-        progFill.ZIndex = 52
-        Instance.new("UICorner", progFill).CornerRadius = UDim.new(0, 4)
-
-        task.spawn(function()
-            local shown, acc = 0, 0
-            while progFrame and progFrame.Parent do
-                RunService.Heartbeat:Wait()
-                local on = M.enabled
-                if progFrame then progFrame.Visible = on end
-                if not on then shown = 0 continue end
-                acc = acc + 0.016
-                if acc < 1/30 then continue end
-                acc = 0
-                local prompt, name = findNearestPrompt()
-                local hasTarget = prompt ~= nil
-                local p = 0
-                if isStealing and stealStartTime then
-                    p = math.clamp((tick() - stealStartTime) / M.halfHoldMax, 0, 1)
-                elseif hasTarget then
-                    p = 1
-                end
-                shown = shown + (p - shown) * 0.3
-                if progFill then progFill.Size = UDim2.new(math.clamp(shown, 0, 1), 0, 1, 0) end
-                if hasTarget then
-                    if progTitle then progTitle.Text = name or "Stealing..." end
-                    if progPct then progPct.Text = string.format("%d%%", math.floor(shown * 100)) end
-                else
-                    if progTitle then progTitle.Text = "AUTO GRAB" end
-                    if progPct then progPct.Text = "searching..." end
-                end
-            end
-        end)
     end
 
     M.start = startAutoGrab
@@ -820,7 +781,6 @@ _G.HighAutoGrab = (function()
         on = on and true or false
         if on then startAutoGrab() else stopAutoGrab() end
     end
-    M.buildUI = buildProgressBar
     M.findNearest = findNearestPrompt
     M.executeSteal = executeSteal
     return M
@@ -1142,6 +1102,101 @@ local function savedBool(data, key, defaultValue)
 end
 
 -- ==========================================
+-- MINECRAFT FONT TOGGLE
+-- ==========================================
+local FontMinecraft = (function()
+    local TargetFont = Enum.Font.Arcade
+    local TargetFontFace
+    pcall(function() TargetFontFace = Font.fromEnum(TargetFont) end)
+    local protectedNames = {"logo", "menu", "topbar", "party"}
+    local originalFonts = {}
+    local watchers = {}
+    local enabled = false
+    local targetRoot
+
+    local function isProtected(instance)
+        local name = string.lower(instance.Name or "")
+        local parentName = instance.Parent and string.lower(instance.Parent.Name or "") or ""
+        local ancestor = instance.Parent
+        while ancestor do
+            if ancestor.Name == "HighBanner" then return false end
+            ancestor = ancestor.Parent
+        end
+        for _, protected in ipairs(protectedNames) do
+            if string.find(name, protected, 1, true) or string.find(parentName, protected, 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function apply(instance)
+        pcall(function()
+            if not enabled or isProtected(instance) then return end
+            if not (instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox")) then return end
+            if not originalFonts[instance] then
+                originalFonts[instance] = { Font = instance.Font, FontFace = instance.FontFace }
+            end
+            instance.Font = TargetFont
+            if TargetFontFace then instance.FontFace = TargetFontFace end
+        end)
+    end
+
+    local function watch(parent)
+        if not parent then return end
+        pcall(function()
+            for _, descendant in ipairs(parent:GetDescendants()) do apply(descendant) end
+            table.insert(watchers, parent.DescendantAdded:Connect(apply))
+        end)
+    end
+
+    local function stopWatchers()
+        for _, connection in ipairs(watchers) do pcall(function() connection:Disconnect() end) end
+        watchers = {}
+    end
+
+    local function restore()
+        for instance, original in pairs(originalFonts) do
+            pcall(function()
+                if instance and instance.Parent then
+                    instance.Font = original.Font
+                    if original.FontFace then instance.FontFace = original.FontFace end
+                end
+            end)
+        end
+        originalFonts = {}
+    end
+
+    local function set(state, root)
+        state = state == true
+        if enabled == state and (not state or targetRoot == root) then return end
+        if enabled then
+            stopWatchers()
+            restore()
+        end
+        enabled = state
+        if enabled then
+            targetRoot = root
+            if targetRoot then watch(targetRoot) end
+        else
+            stopWatchers()
+            restore()
+            targetRoot = nil
+        end
+    end
+
+    local function addRoot(root)
+        if enabled and root then watch(root) end
+    end
+
+    return {
+        set = set,
+        addRoot = addRoot,
+        isEnabled = function() return enabled end,
+    }
+end)()
+
+-- ==========================================
 -- AIMBOT
 -- ==========================================
 do
@@ -1372,7 +1427,6 @@ local function registerPanelLayout(panel, name, defaultMinW, defaultMinH)
 end
 
 local savedSettings = loadSettings()
-_G.AutoResetOnRocket = savedBool(savedSettings, "AutoResetOnRocket", false)
 _G.AutoResetOnBalloon = savedBool(savedSettings, "AutoResetOnBalloon", false)
 _G.AutoFlashTP = savedBool(savedSettings, "AutoFlashTP", false)
 _G.AutoGiant = savedBool(savedSettings, "AutoGiant", false)
@@ -1404,7 +1458,6 @@ _G.AllowDisallowEnabled = savedBool(savedSettings, "AllowDisallowEnabled", true)
 _G.PlayerESP = savedBool(savedSettings, "PlayerESP", false)
 _G.AutoCarpetSpeed = savedBool(savedSettings, "AutoCarpetSpeed", false)
 _G.AntiDie = savedBool(savedSettings, "AntiDie", false)
-_G.AutoGrab = savedBool(savedSettings, "AutoGrab", false)
 _G.AutoBalloonEnabled = savedBool(savedSettings, "AutoBalloon", false)
 _G.CloneESPEnabled = savedBool(savedSettings, "CloneESP", false)
 _G.AllowDisallowESPEnabled = savedBool(savedSettings, "AllowDisallowESP", false)
@@ -1412,6 +1465,7 @@ _G.InfiniteJumpEnabled = savedBool(savedSettings, "InfiniteJump", false)
 _G.AutoTurretEnabled = savedBool(savedSettings, "AutoTurret", false)
 _G.GummyBypassEnabled = savedBool(savedSettings, "GummyBypass", false)
 _G.AntiAdminEnabled = savedBool(savedSettings, "AntiAdmin", false)
+_G.FontMinecraftEnabled = savedBool(savedSettings, "FontMinecraft", false)
 
 -- AUTO BALLOON logic only (no additional GUI)
 local AutoBalloon = {enabled=false, active={}, cooldown={}, conn=nil}
@@ -3791,13 +3845,6 @@ local function BuildHUB()
     pcall(function() protectScreenGui(HIGH_HUB_GUI) end)
     pcall(function() watchReparent(HIGH_HUB_GUI) end)
 
-    -- Auto Grab progress bar
-    pcall(function()
-        if _G.HighAutoGrab and _G.HighAutoGrab.buildUI then
-            _G.HighAutoGrab.buildUI(HIGH_HUB_GUI)
-        end
-    end)
-
     local guiLocked = false
     local lockBtn = Instance.new("TextButton")
     lockBtn.Name = "67"
@@ -3998,14 +4045,97 @@ local function BuildHUB()
         return panel, content, hdr, titleLbl
     end
 
+    local _actionRagdollBusy = false
+    local GIANT_POTION_DELAY = 0.1
+    local RAGDOLL_DELAY = 0.3
+    local function runActionRagdollBypass()
+        if _actionRagdollBusy or thisScriptStopped then return end
+        _actionRagdollBusy = true
+        task.spawn(function()
+            local okAll, errAll = pcall(function()
+                local lp = Players.LocalPlayer
+                local char = lp and lp.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if not char or not hum then return end
+                local backpack = lp:FindFirstChildOfClass("Backpack")
+
+                local potion
+                for _, tool in ipairs(char:GetChildren()) do
+                    if tool:IsA("Tool") and (tool.Name:lower():find("giant", 1, true) or tool.Name:lower():find("grow", 1, true)) then potion = tool break end
+                end
+                if not potion and backpack then
+                    for _, tool in ipairs(backpack:GetChildren()) do
+                        if tool:IsA("Tool") and (tool.Name:lower():find("giant", 1, true) or tool.Name:lower():find("grow", 1, true)) then potion = tool break end
+                    end
+                end
+
+                local potionDone = false
+                local ragdollDone = false
+                task.spawn(function()
+                    if potion then
+                        pcall(function() hum:EquipTool(potion) end)
+                        task.wait(GIANT_POTION_DELAY)
+                        pcall(function() potion:Activate() end)
+                        task.wait(0.06)
+                        pcall(function() potion:Activate() end)
+                    end
+                    potionDone = true
+                end)
+                task.spawn(function()
+                    local box
+                    pcall(function()
+                        local pg = lp:FindFirstChildOfClass("PlayerGui")
+                        local ap = pg and pg:FindFirstChild("AdminPanel")
+                        local inner = ap and ap:FindFirstChild("AdminPanel")
+                        local command = inner and inner:FindFirstChild("CommandBox")
+                        box = command and command:FindFirstChild("TextBox")
+                    end)
+                    if box then
+                        local visible = box.Visible
+                        box.Visible = false
+                        box.Text = ";ragdoll " .. lp.Name
+                        task.wait(RAGDOLL_DELAY)
+                        if getconnections then
+                            for _, conn in pairs(getconnections(box.FocusLost)) do
+                                if conn.Fire then pcall(function() conn:Fire(true) end) end
+                            end
+                        elseif firesignal then
+                            pcall(function() firesignal(box.FocusLost, true) end)
+                        end
+                        task.wait(RAGDOLL_DELAY)
+                        box.Text = ""
+                        box.Visible = visible
+                        ragdollDone = true
+                    end
+                    if not ragdollDone then
+                        pcall(function()
+                            hum:ChangeState(Enum.HumanoidStateType.Physics)
+                            hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
+                            hum.PlatformStand = true
+                        end)
+                        ragdollDone = true
+                    end
+                end)
+                local deadline = tick() + 1.5
+                while (not potionDone or not ragdollDone) and tick() < deadline do task.wait() end
+                pcall(function()
+                    if showToast then showToast("Ragdoll Bypass: Giant + Admin Ragdoll", true) end
+                end)
+            end)
+            if not okAll then warn("[Ragdoll Bypass Action]", errAll) end
+            task.wait(RAGDOLL_DELAY)
+            _actionRagdollBusy = false
+        end)
+    end
+
     -- PANEL ACTIONS
-    local FLASHTP, flashAccent, BLOCK, blockAccent, RESET, resetAccent
+    local FLASHTP, flashAccent, BLOCK, blockAccent, RAGDOLLBYPASS, RESET, resetAccent
     do
         local AW = isMob and 400 or 380
         local ACT_BTN_W = isMob and 80 or 85
         local ACT_BTN_H = isMob and 32 or 36
         local ACT_PADDING = 6
-        local ACT_COUNT = 3
+        local ACT_COUNT = 4
         local AH_HORIZONTAL = HEADER_H + 12 + ACT_BTN_H + 8
         local AH_VERTICAL = HEADER_H + 12 + (ACT_BTN_H + ACT_PADDING) * ACT_COUNT + 8
 
@@ -4089,6 +4219,16 @@ local function BuildHUB()
             lbl.TextWrapped = true
             lbl.TextXAlignment = Enum.TextXAlignment.Center
             lbl.TextYAlignment = Enum.TextYAlignment.Center
+            local labelGradient = Instance.new("UIGradient")
+            labelGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, C.textBright),
+                ColorSequenceKeypoint.new(0.5, C.accentHi),
+                ColorSequenceKeypoint.new(1, C.textBright)
+            })
+            labelGradient.Parent = lbl
+            table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
+                if labelGradient and labelGradient.Parent then labelGradient.Rotation = (tick() * 90) % 360 end
+            end))
             lbl.Parent = b
             local bar = Instance.new("Frame")
             bar.Size = UDim2.new(0, 0, 0, 0)
@@ -4100,9 +4240,52 @@ local function BuildHUB()
             return b, bar, lbl
         end
 
+        local function mkActionButton(txt, order)
+            local b = Instance.new("TextButton")
+            b.Name = "67"
+            b.Size = UDim2.new(0, ACT_BTN_W, 0, ACT_BTN_H)
+            b.BackgroundColor3 = C.card
+            b.BackgroundTransparency = 0.2
+            b.BorderSizePixel = 0
+            b.ZIndex = 7
+            b.Text = ""
+            b.AutoButtonColor = false
+            b.LayoutOrder = order
+            b.Parent = btnContainer
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+            local bs = Instance.new("UIStroke", b)
+            bs.Color = C.strokeDim
+            bs.Thickness = 1
+            bs.Transparency = 0.35
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -4, 1, 0)
+            lbl.Position = UDim2.new(0, 2, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.ZIndex = 9
+            lbl.Text = txt
+            lbl.TextColor3 = C.textBright
+            lbl.TextSize = isMob and 9 or 11
+            lbl.Font = _G.FontMinecraftEnabled and Enum.Font.Arcade or Enum.Font.GothamBold
+            lbl.TextWrapped = true
+            lbl.TextXAlignment = Enum.TextXAlignment.Center
+            local labelGradient = Instance.new("UIGradient")
+            labelGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, C.textBright),
+                ColorSequenceKeypoint.new(0.5, C.accentHi),
+                ColorSequenceKeypoint.new(1, C.textBright)
+            })
+            labelGradient.Parent = lbl
+            table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
+                if labelGradient and labelGradient.Parent then labelGradient.Rotation = (tick() * 90) % 360 end
+            end))
+            lbl.Parent = b
+            return b
+        end
+
         FLASHTP, flashAccent = mkActionBtn("67", "FLASH TP", 1)
         BLOCK, blockAccent = mkActionBtn("67", "BLOCK", 2)
         RESET, resetAccent = mkActionBtn("67", "RESET", 3)
+        RAGDOLLBYPASS = mkActionButton("RAGDOLL BYPASS", 4)
     end
 
     -- PANEL ALLOW/DISALLOW
@@ -4913,13 +5096,12 @@ local function BuildHUB()
         LaggerOnFlash = function() return _G.LaggerOnFlash or false end,
         LaggerPower = function() return _G.LaggerPower or 50 end,
         FlashSpeed = function() return _G.FlashSpeed or 150 end,
-        AutoResetOnRocket = function() return _G.AutoResetOnRocket == true end,
         AllowDisallowEnabled = function() return _G.AllowDisallowEnabled == true end,
         PlayerESP = function() return _G.PlayerESP or false end,
         AutoCarpetSpeed = function() return _G.AutoCarpetSpeed or false end,
         AntiDie = function() return _G.AntiDie or false end,
-        AutoGrab = function() return _G.AutoGrab or false end,
         AutoBalloon = function() return _G.AutoBalloonEnabled == true end,
+        FontMinecraft = function() return _G.FontMinecraftEnabled == true end,
         FpsBooster = function() return _G.FpsBooster == true end,
         CloneESP = function() return _G.CloneESPEnabled == true end,
         AllowDisallowESP = function() return _G.AllowDisallowESPEnabled == true end,
@@ -4931,10 +5113,6 @@ local function BuildHUB()
     }
 
     sectionHeader(ScrollReset, "  AUTO RESET  ")
-    toggleRow(ScrollReset, "Reset on Rocket", _G.AutoResetOnRocket, function(v)
-        _G.AutoResetOnRocket = v
-        saveSettings()
-    end)
     toggleRow(ScrollReset, "Reset on Balloon", _G.AutoResetOnBalloon, function(v)
         _G.AutoResetOnBalloon = v
         saveSettings()
@@ -4954,8 +5132,8 @@ local function BuildHUB()
 
     sectionHeader(ScrollFlash, "  FLASH TP  ")
     toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v) _G.AutoFlashTP = v end)
-    toggleRow(ScrollFlash, "Auto Giant", _G.AutoGiant, function(v) _G.AutoGiant = v end)
     toggleRow(ScrollFlash, "Ragdoll Bypass", _G.RagdollBypass, function(v) _G.RagdollBypass = v end)
+    toggleRow(ScrollFlash, "Auto Giant", _G.AutoGiant, function(v) _G.AutoGiant = v end)
     toggleRow(ScrollFlash, "Lagger on Flash TP", _G.LaggerOnFlash, function(v)
         _G.LaggerOnFlash = v
         if not v then stopFlashLagger() end
@@ -5181,11 +5359,6 @@ local function BuildHUB()
         if _G.AutoBalloon then _G.AutoBalloon.set(v) end
         saveSettings()
     end)
-    toggleRow(ScrollMisc, "Auto Grab", _G.AutoGrab or false, function(v)
-        _G.AutoGrab = v
-        if _G.HighAutoGrab and _G.HighAutoGrab.set then _G.HighAutoGrab.set(v) end
-        saveSettings()
-    end)
     dropdownRow(ScrollMisc, "Walk Item", WalkItemOptions, _G.WalkItem, function(choice) _G.WalkItem = choice end)
     toggleRow(ScrollMisc, "Aimbot", _G.AimbotEnabled or false, function(v) _G.ToggleAimbot(v) end)
     toggleRow(ScrollMisc, "Allow/Disallow", _G.AllowDisallowEnabled, function(v)
@@ -5233,6 +5406,68 @@ local function BuildHUB()
         end
         saveSettings()
     end)
+
+    sectionHeader(ScrollMisc, "  FONT MINECRAFT  ")
+    do
+        sectionOrder += 1
+        local fontRow = Instance.new("Frame")
+        fontRow.Size = UDim2.new(0.92, 0, 0, 42)
+        fontRow.AnchorPoint = Vector2.new(0.5, 0)
+        fontRow.Position = UDim2.new(0.5, 0, 0, 0)
+        fontRow.BackgroundColor3 = C.card
+        fontRow.BackgroundTransparency = 0.35
+        fontRow.BorderSizePixel = 0
+        fontRow.LayoutOrder = sectionOrder
+        fontRow.Parent = ScrollMisc
+        fontRow.ZIndex = 6
+        Instance.new("UICorner", fontRow).CornerRadius = UDim.new(0, 8)
+        local fontStroke = Instance.new("UIStroke", fontRow)
+        fontStroke.Color = C.strokeDim
+        fontStroke.Transparency = 0.2
+
+        local fontLabel = Instance.new("TextLabel", fontRow)
+        fontLabel.Size = UDim2.new(1, -112, 1, 0)
+        fontLabel.Position = UDim2.new(0, 12, 0, 0)
+        fontLabel.BackgroundTransparency = 1
+        fontLabel.Text = "Font Minecraft"
+        fontLabel.TextColor3 = C.textBright
+        fontLabel.TextSize = 12
+        fontLabel.Font = Enum.Font.GothamMedium
+        fontLabel.TextXAlignment = Enum.TextXAlignment.Left
+        fontLabel.ZIndex = 7
+
+        local fontButton = Instance.new("TextButton", fontRow)
+        fontButton.Size = UDim2.new(0, 88, 0, 26)
+        fontButton.Position = UDim2.new(1, -98, 0.5, -13)
+        fontButton.BackgroundColor3 = C.iconBg
+        fontButton.BorderSizePixel = 0
+        fontButton.AutoButtonColor = false
+        fontButton.TextSize = 11
+        fontButton.Font = Enum.Font.GothamBold
+        fontButton.ZIndex = 8
+        Instance.new("UICorner", fontButton).CornerRadius = UDim.new(0, 6)
+        local fontButtonStroke = Instance.new("UIStroke", fontButton)
+        fontButtonStroke.Color = C.accent
+        fontButtonStroke.Transparency = 0.2
+
+        local function refreshFontButton()
+            local active = FontMinecraft.isEnabled()
+            fontButton.Text = active and "Active" or "Disable"
+            fontButton.TextColor3 = active and C.accentHi or C.textMute
+            fontButton.BackgroundTransparency = active and 0.05 or 0.35
+        end
+        fontButton.MouseButton1Click:Connect(function()
+            _G.FontMinecraftEnabled = not _G.FontMinecraftEnabled
+            FontMinecraft.set(_G.FontMinecraftEnabled, HIGH_HUB_GUI)
+            if _G.FontMinecraftEnabled then
+                FontMinecraft.addRoot((LocalPlayer:FindFirstChildOfClass("PlayerGui") or PlayerGui):FindFirstChild("HighBanner"))
+            end
+            refreshFontButton()
+            saveSettings()
+        end)
+        if _G.FontMinecraftEnabled then FontMinecraft.set(true, HIGH_HUB_GUI) end
+        refreshFontButton()
+    end
 
     sectionHeader(ScrollVisual, "  ESP  ")
     toggleRow(ScrollVisual, "Esp Player", _G.PlayerESP, function(v)
@@ -5386,6 +5621,7 @@ local function BuildHUB()
     end
     hookButton(FLASHTP)
     hookButton(BLOCK)
+    hookButton(RAGDOLLBYPASS)
     hookButton(RESET)
 
     local function flashBar(bar)
@@ -5405,6 +5641,9 @@ local function BuildHUB()
         flashBar(blockAccent)
         local target = getNearestPlayer()
         if target then blockPlayer(target) end
+    end)
+    RAGDOLLBYPASS.MouseButton1Click:Connect(function()
+        runActionRagdollBypass()
     end)
     RESET.MouseButton1Click:Connect(function()
         flashBar(resetAccent)
@@ -5434,6 +5673,7 @@ local function BuildHUB()
         flash = Enum.KeyCode.F,
         block = Enum.KeyCode.B,
         reset = Enum.KeyCode.R,
+        ragdoll = Enum.KeyCode.G,
         allow = Enum.KeyCode.A,
     }
     local listeningAction = nil
@@ -5454,12 +5694,14 @@ local function BuildHUB()
             if target then blockPlayer(target) end
         elseif inp.KeyCode == keybinds.reset then
             ResetPlayer()
+        elseif inp.KeyCode == keybinds.ragdoll then
+            runActionRagdollBypass()
         elseif inp.KeyCode == keybinds.allow then
             toggleAllow()
         end
     end))
 
-    local keyNames = { flash = "F", block = "B", reset = "R", allow = "A" }
+    local keyNames = { flash = "F", block = "B", reset = "R", ragdoll = "G", allow = "A" }
     local KB_FILE = "high_keybinds.json"
     local function saveKeybinds()
         pcall(function()
@@ -5467,6 +5709,7 @@ local function BuildHUB()
                 flash = keyNames.flash,
                 block = keyNames.block,
                 reset = keyNames.reset,
+                ragdoll = keyNames.ragdoll,
                 allow = keyNames.allow,
             }))
         end)
@@ -5476,7 +5719,7 @@ local function BuildHUB()
             return HttpService:JSONDecode(readfile(KB_FILE))
         end)
         if ok and type(data) == "table" then
-            for _, action in ipairs({"flash", "block", "reset", "allow"}) do
+            for _, action in ipairs({"flash", "block", "reset", "ragdoll", "allow"}) do
                 if data[action] then
                     local ok2, kc = pcall(function() return Enum.KeyCode[data[action]] end)
                     if ok2 and kc then
@@ -5494,6 +5737,7 @@ local function BuildHUB()
         { action = "flash", title = "Flash TP" },
         { action = "block", title = "Block" },
         { action = "reset", title = "Reset" },
+        { action = "ragdoll", title = "Ragdoll Bypass" },
         { action = "allow", title = "Allow/Disallow" },
     }
     for _, item in ipairs(keybindRows) do
@@ -5568,6 +5812,7 @@ local function BuildHUB()
                 displayButton.Text = actionName == "flash" and "FLASH TP"
                     or actionName == "block" and "BLOCK"
                     or actionName == "reset" and "RESET"
+                    or actionName == "ragdoll" and "RAGDOLL BYPASS"
                     or actionName == "allow" and keyNames.allow
                     or originalText
                 displayButton.TextSize = actionName == "allow" and 11 or (isMob and 9 or 11)
@@ -5672,6 +5917,25 @@ do
         info.TextColor3 = Color3.fromRGB(235, 235, 240)
         info.TextSize = 13
         info.TextXAlignment = Enum.TextXAlignment.Left
+        local bannerGradients = {}
+        for _, label in ipairs({logo, info}) do
+            local gradient = Instance.new("UIGradient")
+            gradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(235, 235, 240)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 180)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(235, 235, 240)),
+            })
+            gradient.Rotation = 0
+            gradient.Parent = label
+            table.insert(bannerGradients, gradient)
+        end
+        table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
+            local rotation = (tick() * 100) % 360
+            for _, gradient in ipairs(bannerGradients) do
+                if gradient and gradient.Parent then gradient.Rotation = rotation end
+            end
+        end))
+        if FontMinecraft.isEnabled() then FontMinecraft.addRoot(gui) end
         local frames, elapsed, fps = 0, 0, 0
         local renderConn = RunService.RenderStepped:Connect(function(dt)
             frames += 1; elapsed += dt
@@ -5718,9 +5982,6 @@ end
 -- ==========================================
 task.defer(function()
     pcall(function()
-        if _G.AutoGrab and _G.HighAutoGrab and _G.HighAutoGrab.set then
-            _G.HighAutoGrab.set(true)
-        end
         if _G.AutoBalloonEnabled and _G.AutoBalloon then _G.AutoBalloon.set(true) end
         if _G.QuickPickup and QuickPickup and QuickPickup.set then QuickPickup.set(true) end
         if _G.AutoCarpetSpeed then hhStartAutoCarpet() end
@@ -5756,9 +6017,6 @@ local function cleanup()
     UltraBooster.stop()
     hhStopAutoCarpet()
     stopAntiDie()
-    if _G.HighAutoGrab and _G.HighAutoGrab.set then
-        pcall(function() _G.HighAutoGrab.set(false) end)
-    end
     if _G.CloneESP and _G.CloneESP.set then _G.CloneESP.set(false) end
     if _G.AllowDisallowESP and _G.AllowDisallowESP.set then _G.AllowDisallowESP.set(false) end
     if _G.GameStretcher and _G.GameStretcher.set then _G.GameStretcher.set(false) end
